@@ -1,4 +1,8 @@
- library(ggplot2)
+#for error: fatal: could not read Username for 'https://github.com': Device not configured
+#run the following line in R Terminal replace user name with yours
+#git remote set-url origin git@github.com:raorben/at-sea.git
+
+library(ggplot2)
 library(dplyr)
 library(data.table)
 library(lubridate)
