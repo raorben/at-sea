@@ -18,13 +18,14 @@ library(dplyr)
 library(data.table)
 library(lubridate)
 
-if(Sys.info()[7]=="rachaelorben") dir<-"/Users/rachaelorben/Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"
+if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
+  dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
 #if(Sys.info()[7]=="will") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
 
-sp<-read.csv("/Users/rachaelorben/Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/data/SeaLog-Species_CodeList.csv")
+sp<-read.csv(paste0(usr,dir,"data/SeaLog-Species_CodeList.csv"))
 names(sp)<-c("Species_Name","Code","Sci_name","Animal")
 
-Files<-list.files(paste0(dir,"data/Corrected"),pattern = ".csv",full.names = T,recursive = T)
+Files<-list.files(paste0(usr,dir,"data/Corrected"),pattern = ".csv",full.names = T,recursive = T)
 
 survey_dat<-NULL
 for (j in 1:length(Files)){
@@ -36,14 +37,22 @@ for (j in 1:length(Files)){
   dat$oid<-1:nrow(dat)
   dat$file<-Files[j]
   
-  dat$Cruise_ID<-sapply(strsplit(Files[j], split='/', fixed=TRUE), function(x) (x[10]))
+  dat$Cruise_ID<-sapply(strsplit(Files[j], split='/', fixed=TRUE), function(x) (x[12])) #RAO specifications
   
   survey_dat<-bind_rows(survey_dat,dat)
 }
+unique(survey_dat$Vessel)
+
+which(survey_dat$Vessel!="PacificStorm")
+#survey_dat[32658,] #search & fix in corrected data
 
 survey_dat[survey_dat=="null"]<-NA
 
 survey_dat$datetime<-ymd_hms(survey_dat$GPSTime)
+
+which(is.na(survey_dat$datetime))
+#survey_dat[30765,] #search & fix in corrected data
+
 survey_dat$month<-month(survey_dat$datetime)
 survey_dat$date<-date(survey_dat$datetime)
 survey_dat$year<-year(survey_dat$datetime)
@@ -54,16 +63,16 @@ survey_dat<-left_join(survey_dat, sp, by=c("Species"="Code"))
 
 # searches for sightings without number of birds --------------------------
 unique(survey_dat$Cruise_ID)
-C_ID<-unique(survey_dat$Cruise_ID)[2] #select new cruise ID here
+C_ID<-unique(survey_dat$Cruise_ID)[3] #select new cruise ID here
 
 missing_number<-survey_dat%>%filter(Cruise_ID==C_ID) %>%
   filter(is.na(Species)==FALSE)%>%
   filter(is.na(Count)==TRUE)
-missing_number
+missing_number #should say: <0 rows> (or 0-length row.names)
 
 #ADD YES TO THIS FILE NAME ONCE YOU HAVE FIXED THESE SIGHTINGS so it is not written over!!!!
-#write.csv(missing_number, 
-#          paste0(dir,"Analysis/processed_data/",C_ID,"_sightings_missing_count_corrected.csv"))
+write.csv(missing_number, 
+          paste0(usr,dir,"Analysis/processed_data/",C_ID,"_sightings_missing_count_correctedYES.csv"))
 
 # species summary for new cruise ---------------------------------------------------------
 species_sum<-survey_dat%>%filter(Cruise_ID==C_ID)%>% 
@@ -80,12 +89,12 @@ species_sum_birds<-species_sum%>%filter(Animal=="bird")%>%
 write.csv(species_sum_birds%>%filter(On.OffTx=="ON")%>%
             ungroup()%>%
             select(-Animal,-On.OffTx), 
-          paste0(dir,"Analysis/processed_data/",C_ID,"_SpeciesSummaryTable_allbirdsON.csv")) #birds ON
+          paste0(usr,dir,"Analysis/processed_data/",C_ID,"_SpeciesSummaryTable_allbirdsON.csv")) #birds ON
 
 write.csv(species_sum_birds%>%filter(On.OffTx=="OFF")%>%
             ungroup()%>%
             select(-Animal,-On.OffTx), 
-          paste0(dir,"Analysis/processed_data/",C_ID,"_SpeciesSummaryTable_allbirdsOFF.csv")) #birds OFF
+          paste0(usr,dir,"Analysis/processed_data/",C_ID,"_SpeciesSummaryTable_allbirdsOFF.csv")) #birds OFF
 
 
 # searches for four-letter codes not in reference list --------------------
@@ -93,7 +102,7 @@ species_sum_UNK<-species_sum%>%filter(is.na(Animal)==TRUE) #codes to fix in data
 info<-survey_dat %>%
   filter(Species %in% species_sum_UNK$Species)
 
-species_sum_UNK_dt<-full_join(species_sum_UNK,info%>%select(Species,datetime,StarboardObs), by="Species")%>%
+species_sum_UNK_dt<-full_join(species_sum_UNK,info%>%select(Species,datetime,StarboardObs,PortObs), by="Species")%>%
   filter(is.na(Species)==FALSE)%>%ungroup()%>%
   select(-Animal,-On.OffTx, -Total_Birds,-Sightings) 
 
@@ -166,23 +175,23 @@ comments<-survey_dat%>%filter(Cruise_ID==C_ID)%>%
   filter(is.na(Comments)==FALSE)
 
 write.csv(comments, 
-          paste0(dir,"Analysis/processed_data/",C_ID,"_survey_data_RecordsWithComments.csv")) 
+          paste0(usr,dir,"Analysis/processed_data/",C_ID,"_survey_data_RecordsWithComments.csv")) 
 
 
 # saves compiled cruise data ----------------------------------------------
 mammal_sightings<-survey_dat%>%filter(Animal=="mammal")%>%filter(Cruise_ID==C_ID)
 write.csv(mammal_sightings, 
-          paste0(dir,"Analysis/processed_data/",C_ID,"_mammals.csv")) #mammals for cruise
+          paste0(usr,dir,"Analysis/processed_data/",C_ID,"_mammals.csv")) #mammals for cruise
 
 write.csv(survey_dat%>%filter(Cruise_ID==C_ID), 
-          paste0(dir,"Analysis/processed_data/",C_ID,"_survey_data.csv")) 
+          paste0(usr,dir,"Analysis/processed_data/",C_ID,"_survey_data.csv")) 
 
 saveRDS(survey_dat%>%filter(Cruise_ID==C_ID), 
-        paste0(dir,"Analysis/processed_data/",C_ID,"_survey_data.rds")) 
+        paste0(usr,dir,"Analysis/processed_data/",C_ID,"_survey_data.rds")) 
 
 # compiles all cruise data together and saves ----------------------------------------------
 
-Files<-list.files(paste0(dir,"Analysis/processed_data/"),pattern = "_survey_data.rds",full.names = T,recursive = T)
+Files<-list.files(paste0(usr,dir,"Analysis/processed_data/"),pattern = "_survey_data.rds",full.names = T,recursive = T)
 
 all_survey<-NULL
 for (j in 1:length(Files)){
@@ -191,4 +200,4 @@ for (j in 1:length(Files)){
 }
 
 saveRDS(all_survey, 
-        paste0(dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
+        paste0(usr,dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 

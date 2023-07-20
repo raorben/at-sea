@@ -8,10 +8,12 @@ library(data.table)
 library(lubridate)
 library(trakR)
 
-if(Sys.info()[7]=="rachaelorben") dir<-"/Users/rachaelorben/Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"
+if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
+dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
+
 #if(Sys.info()[7]=="will") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
 
-survey_dat<-readRDS(paste0(dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
+survey_dat<-readRDS(paste0(usr,dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
 
 
 # unique IDs for on effort segments ---------------------------------------
@@ -49,14 +51,14 @@ w2hr<-map_data('world')
 w2hr_sub<-w2hr[w2hr$region%in%c("USA","Canada"),]
 
 ggplot()+
-  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
   geom_path(data=survey_dat_ON,aes(x=Longitude,y=Latitude, group=Segment_ODid))+
   coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,46.2))+
   xlab(expression(paste("Longitude (",degree,"W)")))+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
   facet_wrap(~Cruise_ID)
-ggsave(paste0(dir,"/Analysis/maps/On_Effort.jpeg"))
+ggsave(paste0(usr,dir,"/Analysis/maps/On_Effort.jpeg"))
 
 quartz(height=7,width=8)
 ggplot()+
@@ -69,7 +71,7 @@ ggplot()+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
   facet_wrap(~Cruise_ID)
-ggsave(paste0(dir,"/Analysis/maps/SeabirdSightings.jpeg"))
+ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings.jpeg"))
 
 quartz(height=8,width=12)
 ggplot()+
@@ -82,7 +84,7 @@ ggplot()+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
   facet_wrap(~Cruise_ID)
-ggsave(width=10,paste0(dir,"/Analysis/maps/SeabirdSightings_FullName.jpeg"))
+ggsave(width=10,paste0(usr,dir,"/Analysis/maps/SeabirdSightings_FullName.jpeg"))
 
 ggplot()+
   geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
@@ -94,7 +96,7 @@ ggplot()+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
   facet_wrap(~Cruise_ID)
-ggsave(paste0(dir,"/Analysis/maps/MammalSightings.jpeg"))
+ggsave(paste0(usr,dir,"/Analysis/maps/MammalSightings.jpeg"))
 
 
 # selects out species with >30 sightings for individual species map -------
@@ -108,7 +110,7 @@ birds<-species_sum%>%filter(Animal=="bird")%>%filter(Sightings>30)
 bird_IDs<-unique(birds$Species)
 
 birds_to_model<-survey_dat_ON%>%filter(Species %in% bird_IDs)
-C_ID<-unique(birds_to_model$Cruise_ID)[2]
+C_ID<-unique(birds_to_model$Cruise_ID)[3]
 
 birds_to_model$Species<-as.factor(birds_to_model$Species)
 
@@ -123,7 +125,7 @@ ggplot()+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
   theme(axis.text.x = element_text(angle = -60, hjust=-.1))
-ggsave(paste0(dir,"/Analysis/maps/SeabirdSightings_topSP_sightings30_Cruise",C_ID,".jpeg"))
+ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_topSP_sightings30_Cruise",C_ID,".jpeg"))
 
 
 unique(survey_dat_ON$FlightHt)
@@ -139,7 +141,7 @@ ggplot()+
   ylab("Count")+
   xlab("")+
   theme(legend.position = "none")+facet_wrap(~Cruise_ID)
-ggsave(paste0(dir,"/Analysis/maps/SeabirdSightings_FlightHeight>20m.jpeg"))  
+ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_FlightHeight>20m.jpeg"))  
 
 
 # COMU behavior teser for Brian & Brian
@@ -152,9 +154,9 @@ ggplot()+
   ylab("Count")+
   xlab("")+
   facet_wrap(~Cruise_ID)
-ggsave(paste0(dir,"/Analysis/maps/COMUbehavior_AugOct2022_Orben.jpeg"))  
+ggsave(paste0(usr,dir,"/Analysis/maps/COMUbehavior.jpeg"))  
 
-# COMU behavior teser for Brian & Brian
+#COMU behavior teser for Brian & Brian
 ggplot()+
   geom_bar(data=survey_dat%>%filter(Species=="SOSH" | Species=="STSH"| Species=="SSSH")%>%
              filter(is.na(PrimaryBehavior)==FALSE),
@@ -164,7 +166,7 @@ ggplot()+
   ylab("Count")+
   xlab("")+
   facet_wrap(~Cruise_ID)
-ggsave(paste0(dir,"/Analysis/maps/Shearwater_behavior_AugOct2022_Orben.jpeg"))  
+ggsave(paste0(usr,dir,"/Analysis/maps/Shearwater_behavior.jpeg"))
 
 quartz(height=7,width=8)
 ggplot()+
@@ -178,7 +180,7 @@ ggplot()+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
   facet_wrap(~Cruise_ID)
-ggsave(paste0(dir,"/Analysis/maps/MAMUSightings.jpeg"))
+ggsave(paste0(usr,dir,"/Analysis/maps/MAMUSightings.jpeg"))
 
 survey_dat_ON%>%filter(Species!="null")%>%
   filter(Animal=="bird")%>%filter(Species=="MAMU")%>%
