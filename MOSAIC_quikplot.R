@@ -11,7 +11,7 @@ library(trakR)
 if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
 dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
 
-#if(Sys.info()[7]=="will") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
+if(Sys.info()[7]=="kennerlw") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
 
 # compiles all cruise data together and saves ----------------------------------------------
 
