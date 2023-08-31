@@ -1,0 +1,22 @@
+#for error: fatal: could not read Username for 'https://github.com': Device not configured
+#run the following line in R Terminal replace user name with yours
+#git remote set-url origin git@github.com:raorben/at-sea.git
+
+library(ggplot2)
+library(dplyr)
+library(data.table)
+library(lubridate)
+library(trakR)
+
+if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
+dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
+
+if(Sys.info()[7]=="kennerlw") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
+
+survey_dat<-readRDS(paste0(usr,dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
+
+
+Sys.info()
+
+Personal Access Token (github, 08/31/2023)
+ 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 
