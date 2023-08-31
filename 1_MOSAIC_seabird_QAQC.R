@@ -20,12 +20,14 @@ library(lubridate)
 
 if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
   dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
-if(Sys.info()[7]=="kennerlw") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
 
-sp<-read.csv(paste0(usr,dir,"data/SeaLog-Species_CodeList.csv"))
+if(Sys.info()[7]=="kennerlw") {usr<-"//Users//kennerlw";
+dir<-"//Library//CloudStorage//Box-Box//Seabird Oceanography Lab//Current_Research//MOSAIC_Seabird At-Sea Observations//"}
+
+sp<-read.csv(paste0(usr,dir,"data//SeaLog-Species_CodeList.csv"))
 names(sp)<-c("Species_Name","Code","Sci_name","Animal")
 
-Files<-list.files(paste0(kennerlw,dir,"data/Corrected"),pattern = ".csv",full.names = T,recursive = T)
+Files<-list.files(paste0(usr,dir,"data//Corrected"),pattern = ".csv",full.names = T,recursive = T)
 
 survey_dat<-NULL
 for (j in 1:length(Files)){
