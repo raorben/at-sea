@@ -13,7 +13,21 @@ dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MO
 
 #if(Sys.info()[7]=="will") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
 
+# compiles all cruise data together and saves ----------------------------------------------
+
+Files<-list.files(paste0(usr,dir,"Analysis/processed_data/"),pattern = "_survey_data.rds",full.names = T,recursive = T)
+
+all_survey<-NULL
+for (j in 1:length(Files)){
+  dat<-readRDS(Files[j])
+  all_survey<-rbind(all_survey,dat)
+}
+
+saveRDS(all_survey, 
+        paste0(usr,dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
+
 survey_dat<-readRDS(paste0(usr,dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
+unique(survey_dat$Cruise_ID)
 
 
 # unique IDs for on effort segments ---------------------------------------
@@ -46,6 +60,8 @@ ggplot()+
 
 
 # all cruise plots ---------------------------------------------------------
+C_ID<-unique(survey_dat_ON$Cruise_ID)[4]
+
 newp<-data.frame(name="Newport",lat=44.620416,lon=-124.056905)
 w2hr<-map_data('world')
 w2hr_sub<-w2hr[w2hr$region%in%c("USA","Canada"),]
@@ -59,6 +75,21 @@ ggplot()+
   theme_bw()+
   facet_wrap(~Cruise_ID)
 ggsave(paste0(usr,dir,"/Analysis/maps/On_Effort.jpeg"))
+
+
+survey_dat_ON$date<-as.factor(date(survey_dat_ON$datetime))
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
+  geom_path(data=survey_dat_ON%>%filter(Cruise_ID==C_ID),
+             aes(x=Longitude,y=Latitude, group=Segment_ODid, color=date))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,46.2))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  #theme(legend.position = "none")+
+  facet_wrap(~Cruise_ID, nrow=1)
+ggsave(paste0(usr,dir,"/Analysis/maps/On_Effort_",C_ID,".jpeg"))
+
 
 quartz(height=7,width=8)
 ggplot()+
@@ -110,7 +141,8 @@ birds<-species_sum%>%filter(Animal=="bird")%>%filter(Sightings>30)
 bird_IDs<-unique(birds$Species)
 
 birds_to_model<-survey_dat_ON%>%filter(Species %in% bird_IDs)
-C_ID<-unique(birds_to_model$Cruise_ID)[3]
+unique(birds_to_model$Species_Name)
+
 
 birds_to_model$Species<-as.factor(birds_to_model$Species)
 
