@@ -18,7 +18,7 @@ library(dplyr)
 library(data.table)
 library(lubridate)
 
-#if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
+if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
   dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
 
 if(Sys.info()[7]=="kennerlw") {usr<-"/Users/kennerlw";
@@ -41,7 +41,7 @@ for (j in 1:length(Files)){
   dat$oid<-1:nrow(dat)
   dat$file<-Files[j]
   
-  dat$Cruise_ID<-sapply(strsplit(Files[j], split='/', fixed=TRUE), function(x) (x[12])) #RAO specifications
+  dat$Cruise_ID<-sapply(strsplit(Files[j], split='/', fixed=TRUE), function(x) (x[12])) #RAO specifications for folder name
   dat$Transect<-as.character(dat$Transect)
   
   survey_dat<-bind_rows(survey_dat,dat)
