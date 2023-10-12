@@ -25,7 +25,7 @@ if(Sys.info()[7]=="kennerlw") {usr<-"/Users/kennerlw";
 dir<-"/Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
 
 sp<-read.csv(paste0(usr,dir,"data/SeaLog-Species_CodeList.csv"))
-names(sp)<-c("Species_Name","Code","Sci_name","Animal")
+names(sp)<-c("Species_Name","Code","Sci_name","Animal","Unidentified_YN")
 
 Files<-list.files(paste0(usr,dir,"data/CorrectedData"),pattern = ".csv",full.names = T,recursive = T)
 

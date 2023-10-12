@@ -13,6 +13,9 @@ dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MO
 
 if(Sys.info()[7]=="kennerlw") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
 
+sp<-read.csv(paste0(usr,dir,"data/SeaLog-Species_CodeList.csv"))
+names(sp)<-c("Species_Name","Code","Sci_name","Animal","Unidentified_YN")
+
 # compiles all cruise data together and saves ----------------------------------------------
 
 Files<-list.files(paste0(usr,dir,"Analysis/processed_data/"),pattern = "_survey_data.rds",full.names = T,recursive = T)
@@ -22,6 +25,10 @@ for (j in 1:length(Files)){
   dat<-readRDS(Files[j])
   all_survey<-rbind(all_survey,dat)
 }
+
+str(sp$Code)
+str(unique(all_survey$Species))
+all_survey<-left_join(all_survey,sp%>%select(Code,Unidentified_YN), by=c("Species"="Code"))
 
 saveRDS(all_survey, 
         paste0(usr,dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
@@ -45,6 +52,9 @@ survey_dat_ON<-survey_dat%>%filter(On.OffTx=="ON")%>%
          # gapID=ifelse(!is.na(gapID),gapID,""),# Make any gapIDs that are NAs an empty string
          Segment_ODid=paste0(as.character(Cruise_ID),"_",gapID)) 
 unique(survey_dat_ON$Segment_ODid)
+survey_dat_ON$Cruise_Type<-"MOSAIC"
+survey_dat_ON$Cruise_Type[survey_dat_ON$Cruise_ID=="202307HL3" | survey_dat_ON$Cruise_ID=="202308HL4"]<-"HAKE"
+
 
 # quick summary of off-transect sightings
 survey_dat_OFF<-survey_dat%>%filter(On.OffTx=="OFF")%>%filter(Species!="null")
@@ -59,9 +69,10 @@ ggplot()+
   theme(legend.position = "none")
 
 
-# all cruise plots ---------------------------------------------------------
-C_ID<-unique(survey_dat_ON$Cruise_ID)[4]
 
+# all cruise plots ---------------------------------------------------------
+unique(survey_dat_ON$Cruise_ID)
+C_ID<-unique(survey_dat_ON$Cruise_ID)[4]
 newp<-data.frame(name="Newport",lat=44.620416,lon=-124.056905)
 w2hr<-map_data('world')
 w2hr_sub<-w2hr[w2hr$region%in%c("USA","Canada"),]
@@ -73,7 +84,7 @@ ggplot()+
   xlab(expression(paste("Longitude (",degree,"W)")))+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
-  facet_wrap(~Cruise_ID)
+  facet_wrap(~Cruise_Type+Cruise_ID, nrow=1)
 ggsave(paste0(usr,dir,"/Analysis/maps/On_Effort.jpeg"))
 
 
@@ -89,6 +100,17 @@ ggplot()+
   #theme(legend.position = "none")+
   facet_wrap(~Cruise_ID, nrow=1)
 ggsave(paste0(usr,dir,"/Analysis/maps/On_Effort_",C_ID,".jpeg"))
+
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
+  geom_path(data=survey_dat_ON%>%filter(Cruise_Type=="HAKE"),
+            aes(x=Longitude,y=Latitude, group=Segment_ODid, color=date))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-123),ylim=c(40.1,48.5))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()
+  #theme(legend.position = "none")
+ggsave(paste0(usr,dir,"/Analysis/maps/On_Effort_HAKE.jpeg"))
 
 
 quartz(height=7,width=8)
@@ -133,6 +155,7 @@ ggsave(paste0(usr,dir,"/Analysis/maps/MammalSightings.jpeg"))
 # selects out species with >30 sightings for individual species map -------
 species_sum<-survey_dat_ON%>%
   filter(Species!="null")%>%
+  filter(Unidentified_YN=="N")%>%
   group_by(Species, Species_Name, Animal)%>%
   summarise(Total_Birds=sum(Count, na.rm=TRUE),Sightings=n())%>%
   arrange(-Sightings)
@@ -146,7 +169,9 @@ unique(birds_to_model$Species_Name)
 
 birds_to_model$Species<-as.factor(birds_to_model$Species)
 
-quartz(height=7, width=6)
+
+C_ID<-unique(survey_dat_ON$Cruise_ID)[5]
+quartz(height=7, width=8)
 ggplot()+
   geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
   geom_path(data=survey_dat_ON%>%select(-Species)%>%filter(Cruise_ID==C_ID),aes(x=Longitude,y=Latitude, group=Segment_ODid))+
@@ -157,7 +182,21 @@ ggplot()+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
   theme(axis.text.x = element_text(angle = -60, hjust=-.1))
-ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_topSP_sightings30_Cruise",C_ID,".jpeg"))
+ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_topSP_sightings30_Cruise",C_ID,"noUNI.jpeg"))
+
+quartz(height=7, width=8)
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
+  geom_path(data=survey_dat_ON%>%select(-Species)%>%filter(Cruise_Type=="HAKE"),aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=birds_to_model%>%filter(Cruise_Type=="HAKE"),
+             aes(x=Longitude,y=Latitude, color=Species_Name, size=Count))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,48))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = -60, hjust=-.1))
+ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_topSP_sightings30_Cruise_HAKE_noUNI.jpeg"))
+
 
 
 unique(survey_dat_ON$FlightHt)
@@ -176,7 +215,9 @@ ggplot()+
 ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_FlightHeight>20m.jpeg"))  
 
 
-# COMU behavior teser for Brian & Brian
+# COMU behavior teser for Brian & Brian -----------------------------------
+
+
 ggplot()+
   geom_bar(data=survey_dat%>%filter(Species=="COMU")%>%
              filter(is.na(PrimaryBehavior)==FALSE),
@@ -188,7 +229,7 @@ ggplot()+
   facet_wrap(~Cruise_ID)
 ggsave(paste0(usr,dir,"/Analysis/maps/COMUbehavior.jpeg"))  
 
-#COMU behavior teser for Brian & Brian
+
 ggplot()+
   geom_bar(data=survey_dat%>%filter(Species=="SOSH" | Species=="STSH"| Species=="SSSH")%>%
              filter(is.na(PrimaryBehavior)==FALSE),
@@ -200,6 +241,8 @@ ggplot()+
   facet_wrap(~Cruise_ID)
 ggsave(paste0(usr,dir,"/Analysis/maps/Shearwater_behavior.jpeg"))
 
+
+# MAMU sigtings -----------------------------------------------------------
 quartz(height=7,width=8)
 ggplot()+
   geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
@@ -221,6 +264,9 @@ survey_dat_ON%>%filter(Species!="null")%>%
             n_sightings=n())
 
 
+
+# TUPUs -------------------------------------------------------------------
+
 quartz(height=7,width=8)
 ggplot()+
   geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
@@ -240,3 +286,99 @@ survey_dat_ON%>%filter(Species!="null")%>%
   group_by(Cruise_ID)%>%
   summarise(n_birds=sum(Count),
             n_sightings=n())
+
+# BFAL & LAALs -------------------------------------------------------------------
+
+quartz(height=7,width=8)
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
+  geom_path(data=survey_dat_ON,aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=survey_dat_ON%>%filter(Species!="null")%>%
+               filter(Animal=="bird")%>%filter(Species=="BFAL" | Species=="LAAL"),
+             aes(x=Longitude,y=Latitude, color=Species, size=Count))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,46.2))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  facet_wrap(~Cruise_ID)
+ggsave(paste0(usr,dir,"/Analysis/maps/BFAL&LAALSightings.jpeg"))
+
+survey_dat_ON%>%filter(Species!="null")%>%
+  filter(Animal=="bird")%>%filter(Species=="BFAL"| Species=="LAAL")%>%
+  group_by(Cruise_ID)%>%
+  summarise(n_birds=sum(Count),
+            n_sightings=n())
+
+
+# Cruise Summary: Unidentified vs. Identified ----------------------------------------------------------
+library(tidyr)
+survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
+                         group_by(Unidentified_YN,Cruise_Type,Cruise_ID)%>%
+  summarise(n=n(),
+            totalcount=sum(Count))
+
+survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
+  group_by(Unidentified_YN,Cruise_Type)%>%
+  summarise(n=n(),
+            totalcount=sum(Count))
+
+
+Unk_long<-survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
+  filter(Unidentified_YN=="Y")%>%
+  group_by(Unidentified_YN,Cruise_ID,Species_Name)%>%
+  summarise(n=n(),
+            totalcount=sum(Count))
+
+Unk_Survey<-survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
+  filter(Unidentified_YN=="Y")%>%
+  group_by(Unidentified_YN,Cruise_ID)%>%
+  summarise(n=n(),
+            totalcount=sum(Count))
+
+(UNK_wide_sightings<-Unk_long %>% select(-totalcount)%>%
+  pivot_wider(names_from = c(Cruise_ID), values_from = c(n), values_fill = 0)%>% 
+  ungroup()%>%select(-Unidentified_YN))
+
+(UNK_wide_total<-Unk_long %>%select(-n)%>%
+    pivot_wider(names_from = c(Cruise_ID), values_from = c(totalcount), values_fill = 0)%>% 
+    ungroup()%>%select(-Unidentified_YN))
+
+
+survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
+  group_by(Unidentified_YN,Cruise_Type,Cruise_ID)%>%
+  summarise(n=n(),
+            totalcount=sum(Count))
+
+
+
+C<-survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
+  #filter(Cruise_ID=="202308")%>%
+  filter(Cruise_Type=="HAKE")%>%
+  filter(Unidentified_YN=="N")
+nrow(C)
+sum(C$Count)
+length(unique(C$Species))
+unique(C$Species_Name)
+
+Cu<-survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
+  #filter(Cruise_ID=="202308")%>%
+  filter(Cruise_Type=="HAKE")%>%
+  filter(Unidentified_YN=="Y")
+nrow(Cu)
+sum(Cu$Count)
+length(unique(Cu$Species))
+unique(Cu$Species_Name)
+
+
+# sightings sorted by known & unknown -------------------------------------
+(sighting_sum<-survey_dat_ON%>%filter(Animal=="bird")%>%
+    select(-Animal)%>%
+    filter(Bin!="outside of area")%>%
+  filter(Cruise_ID=="202308")%>%
+  #filter(Cruise_Type=="HAKE")%>%
+  group_by(Species_Name,Unidentified_YN)%>%
+  summarise(Sightings=n(),Individuals=sum(Count))%>%
+  arrange(Unidentified_YN))
+write.csv(sighting_sum, 
+          paste0(usr,dir,"Analysis/processed_data/sightingsSum_202308.csv")) 
+
