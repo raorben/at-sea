@@ -39,6 +39,7 @@ unique(survey_dat$Cruise_ID)
 
 # unique IDs for on effort segments ---------------------------------------
 # helpful for plotting
+# add in filter for "outside of zone" ON effort observations
 names(survey_dat)
 
 survey_dat_ON<-survey_dat%>%filter(On.OffTx=="ON")%>%
