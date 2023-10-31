@@ -353,6 +353,7 @@ ggplot()+
   theme(legend.title = element_blank())
 ggsave(paste0(usr,dir,"/Analysis/maps/RHAUSightings_All_colorMonth.jpeg"))
 
+
 survey_dat_ON%>%filter(Species!="null")%>%
   filter(Animal=="bird")%>%filter(Species=="RHAU")%>%
   group_by(Cruise_ID)%>%
