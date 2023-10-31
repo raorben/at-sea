@@ -8,6 +8,8 @@ library(data.table)
 library(lubridate)
 library(trakR)
 
+library(sf)
+
 if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
 dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
 
@@ -287,6 +289,76 @@ survey_dat_ON%>%filter(Species!="null")%>%
   group_by(Cruise_ID)%>%
   summarise(n_birds=sum(Count),
             n_sightings=n())
+
+# RHAU & Wind for ARF Proposal--------------------------------------------------------------------
+quartz(height=7,width=8)
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
+  geom_path(data=survey_dat_ON,aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=survey_dat_ON%>%filter(Species!="null")%>%
+               filter(Animal=="bird")%>%filter(Species=="RHAU"),
+             aes(x=Longitude,y=Latitude, color=Species, size=Count))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,46.2))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  facet_wrap(~Cruise_ID)
+ggsave(paste0(usr,dir,"/Analysis/maps/RHAUSightings_byCruise.jpeg"))
+
+quartz(height=7,width=8)
+#Wind Energy Lease Araes
+
+path.OWF<- paste0(usr,dir,"data/BOEM_Renewable_Energy_Shapefiles_6/BOEM_Wind_Planning_Area_Outlines_10_19_2023.shp")
+OWF.lr <- st_read(path.OWF)
+OWF.lr <-sf::st_as_sf(OWF.lr )
+str(OWF.lr)
+OWF.lr$ADDITIONAL
+#hack to avoid converting other data to sf
+OWF.B<-OWF.lr%>%filter(CATEGORY1=="Oregon Call Area")%>%filter(ADDITIONAL=="Oregon Call Area - Brookings")
+brook<-OWF.B
+lonlat = unlist(map(brook$geometry,1))
+brook2<-data.frame(lat=lonlat[176:350],lon=lonlat[1:175])
+OWF.C<-OWF.lr%>%filter(CATEGORY1=="Oregon Call Area")%>%filter(ADDITIONAL=="Oregon Call Area - Coos Bay")
+coos<-OWF.C
+lonlat = unlist(map(coos$geometry,1))
+coos2<-data.frame(lat=lonlat[256:510],lon=lonlat[1:255])
+
+states <- map_data("state")
+survey_dat_ON$month<-(month(survey_dat_ON$datetime,label=TRUE))
+colonies<-data.frame(colony=c("Hunters Island"),
+                     lat=c(42.313556),
+                     lon=c(-124.425298))
+
+ggplot()+
+  #geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
+  geom_polygon(data=states,aes((long),lat,group=group),fill="gray10",color="grey95",linewidth=0.1)+
+  geom_polygon(data=coos2,aes(y=lat,x=lon),fill="gray80")+
+  geom_polygon(data=brook2,aes(y=lat,x=lon),fill="gray80")+
+  geom_path(data=survey_dat_ON,aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=survey_dat_ON%>%filter(Species!="null")%>%
+               filter(Animal=="bird")%>%filter(Species=="RHAU"),
+             aes(x=Longitude,y=Latitude, color=as.factor(month), size=Count))+
+  geom_point(data=colonies,
+             aes(x=lon,y=lat), color="turquoise", size=3, pch=17)+
+  annotate("text", label = "Hunters Island", x = -123.8, y = 42.313556, size = 3, colour = "white")+
+  annotate("text", label = "Oregon Call Area", x = -126.35, y = 43.8, size = 3, hjust = 0, colour = "black")+
+  annotate("text", label = "Coos Bay", x = -126.35, y = 43.7, size = 3, hjust = 0, colour = "black")+
+  annotate("text", label = "Oregon Call Area", x = -126.35, y = 42.2, size = 3, hjust = 0, colour = "black")+
+  annotate("text", label = "Brookings", x = -126.35, y = 42.1, size = 3, hjust = 0, colour = "black")+
+  scale_color_manual(values=met.brewer("Tam", 4))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(41,44.5))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  theme(legend.title = element_blank())
+ggsave(paste0(usr,dir,"/Analysis/maps/RHAUSightings_All_colorMonth.jpeg"))
+
+survey_dat_ON%>%filter(Species!="null")%>%
+  filter(Animal=="bird")%>%filter(Species=="RHAU")%>%
+  group_by(Cruise_ID)%>%
+  summarise(n_birds=sum(Count),
+            n_sightings=n())
+
 
 # BFAL & LAALs -------------------------------------------------------------------
 
