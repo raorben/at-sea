@@ -179,7 +179,7 @@ unique(birds_to_model$Species_Name)
 birds_to_model$Species<-as.factor(birds_to_model$Species)
 
 
-C_ID<-unique(survey_dat_ON$Cruise_ID)[5]
+C_ID<-unique(survey_dat_ON$Cruise_ID)[7]
 quartz(height=7, width=8)
 ggplot()+
   geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
@@ -499,11 +499,56 @@ unique(Cu$Species_Name)
 (sighting_sum<-survey_dat_ON%>%filter(Animal=="bird")%>%
     select(-Animal)%>%
     filter(Bin!="outside of area")%>%
-  filter(Cruise_ID=="202308")%>%
+  filter(Cruise_ID=="202310")%>%
   #filter(Cruise_Type=="HAKE")%>%
   group_by(Species_Name,Unidentified_YN)%>%
   summarise(Sightings=n(),Individuals=sum(Count))%>%
   arrange(Unidentified_YN))
 write.csv(sighting_sum, 
           paste0(usr,dir,"Analysis/processed_data/sightingsSum_202310.csv")) 
+
+# HAKE top Species --------------------------------------------------------
+
+quartz(height=7, width=8)
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
+  geom_path(data=survey_dat_ON%>%select(-Species)%>%filter(Cruise_Type=="HAKE"),aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=birds_to_model%>%filter(Cruise_Type=="HAKE")%>%filter(Species=="COMU"),
+             aes(x=Longitude,y=Latitude, color=Species_Name, size=Count))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,48))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = -60, hjust=-.1))
+ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_COMU_Cruise_HAKE_noUNI.jpeg"))
+
+
+quartz(height=7, width=8)
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
+  geom_path(data=survey_dat_ON%>%select(-Species)%>%filter(Cruise_Type=="HAKE"),aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=birds_to_model%>%filter(Cruise_Type=="HAKE")%>%
+               filter(Species=="STSH"|Species=="SOSH" |Species=="BULS"  |Species=="PFSH"),
+             aes(x=Longitude,y=Latitude, color=Species_Name, size=Count))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,48))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = -60, hjust=-.1))+facet_wrap(~Species, nrow=1)
+ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_Shearwaters_Cruise_HAKE_noUNI.jpeg"))
+
+
+quartz(height=7, width=8)
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
+  geom_path(data=survey_dat_ON%>%select(-Species)%>%filter(Cruise_Type=="HAKE"),aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=birds_to_model%>%filter(Cruise_Type=="HAKE")%>%
+               filter(Species=="BFAL" |Species=="NOFU"),
+             aes(x=Longitude,y=Latitude, color=Species_Name, size=Count))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,48))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = -60, hjust=-.1))+facet_wrap(~Species, nrow=1)
+ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_BFAL_NOFU_Cruise_HAKE_noUNI.jpeg"))
 
