@@ -6,7 +6,8 @@ FLOCK_FILES=FLOCK_FILES[substr(FLOCK_FILES$FILE_NAMES,1,1)=="F",]
 file.create(OUTPUT)
 for(i in 1:nrow(FLOCK_FILES))
 {file.append(OUTPUT,paste(DIR,FLOCK_FILES$FILE_NAMES[i],sep="/"))}
-}   
+} 
+
 #Example: FLOCK_COMBINE(DIR="~/Grad School/Research/1_2013_Seabird and Flock Analyses/Raw Data/Flock Data/Yearly_Archives/2002/dsj/Leg 1 flock files",
 #                       OUTPUT="~/Desktop/Test.txt")
 
