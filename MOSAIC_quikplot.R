@@ -276,24 +276,23 @@ survey_dat_ON%>%filter(Species!="null")%>%
 
 
 
-# TUPUs -------------------------------------------------------------------
-
+# BRAC --------------------------------------------------------------------
 quartz(height=7,width=8)
 ggplot()+
-  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
   geom_path(data=survey_dat_ON,aes(x=Longitude,y=Latitude, group=Segment_ODid))+
   geom_point(data=survey_dat_ON%>%filter(Species!="null")%>%
-               filter(Animal=="bird")%>%filter(Species=="TUPU"),
+               filter(Animal=="bird")%>%filter(Species_Name=="Brandt's Cormorant"),
              aes(x=Longitude,y=Latitude, color=Species, size=Count))+
   coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,46.2))+
   xlab(expression(paste("Longitude (",degree,"W)")))+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
   facet_wrap(~Cruise_ID, nrow=2)
-ggsave(paste0(usr,dir,"/Analysis/maps/TUPUSightings.jpeg"))
+ggsave(paste0(usr,dir,"/Analysis/maps/BRACSightings.jpeg"))
 
 survey_dat_ON%>%filter(Species!="null")%>%
-  filter(Animal=="bird")%>%filter(Species=="TUPU")%>%
+  filter(Animal=="bird")%>%filter(Species_Name=="Brandt's Cormorant")%>%
   group_by(Cruise_ID)%>%
   summarise(n_birds=sum(Count),
             n_sightings=n())
