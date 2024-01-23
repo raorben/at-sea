@@ -42,12 +42,12 @@ dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MO
 if(Sys.info()[7]=="kennerlw") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
 
 source(paste0(usr,gitdir,"seabird_functions.R"))
-source(paste0("/Users/rachaelorben/git_repos/TheCormorantOceanographyProject/CormOcean_QuickViz/",'MakeDive.R'))
 
 #### SEABIRD_CODES ####
 
 sp<-read.csv(paste0(usr,dir,"data/SeaLog-Species_CodeList.csv"))
 names(sp)<-c("Species_Name","Code","Sci_name","Animal","Unidentified_YN")
+head(sp)
 
 #### obs ####
 #This block of code imports seabird strip transect survey data (obs)
@@ -68,13 +68,13 @@ names(obs)
 #            "DISTANCE","ASSOC","BEHAV","FLIGHT_DIR","AGE","SEX","COMMENTS","GMT_OFFSET","TEXT"))
 
 #standardize missing  value codes
-obs[is.na(obs$Latitude) | obs$Latitude==99.999,"Latitude"]=NA
-obs[is.na(obs$Longitude) | obs$Longitude==999.999,"Longitude"]=NA
+obs[is.na(obs$Latitude) | obs$Latitude==99.999,"Latitude"]<-NA
+obs[is.na(obs$Longitude) | obs$Longitude==999.999,"Longitude"]<-NA
 
 summary(obs)
 
 #Eliminate "9999" codes in Count (signifying NA or not counted - primarily used for fish/dolphins)
-obs[!is.na(obs$Count) & obs$Count ==9999,"Count"]=NA
+obs[!is.na(obs$Count) & obs$Count ==9999,"Count"]<-NA
 
 #Preserve original Latitude and Longitude (some of which will be replaced by LAT_MAM, LONG_MAM)
 obs$lat_bird<-obs$Latitude
@@ -92,11 +92,43 @@ obs%>%filter(is.na(Longitude))
 # 3. Add TRANSECT ID information to OBSERVATION dataframe based on ON/OFF Tx and changes in "Condition"
 unique(obs$Condition) #"5" "4" "3" "1" "2" NA 
 
-
+#flag condition changes
+#flag observer changes
+#flag time gaps in GPS crumbs and On/Off
+#calculate turning angles and flag angles greater than 10 over a X min period. 
 
 #drop the EVENT_CODE==0 rows because they mess up the subsequent assignment of TRANSECT_ID
-obs=obs[obs$EVENT_CODE!=0,]
+#Definitions from SEABIRD SURVEY INSTRUCTION MANUAL California Current Ecosystem Survey – CCES - 2018
+#0 - Automatic Time/Position Update: This code will automatically be entered by the computer approximately every 10 minutes and a time and position stamp will follow.
+#1 - Begin Transect: Use this code to indicate the beginning of an on-effort transect. 
+    #You will need to begin a new transect when any of the environmental conditions change, 
+    #when you change observers, or when the ship makes a major course change (> 10°) for any reason. 
+#2 - On Effort Sighting: Use this code to indicate a sighting of any type while you are on effort. 
+    #A sighting will include birds, bird flocks, mammals, fish, turtles and sharks.
+#3 - End Transect: Use this code to indicate the end of an on-effort transect. The most common reasons for ending the 
+    #effort period will be a major course change (> 10°) for any reason, a change of observers, a change in environmental 
+    #conditions, deviation from the track to pursue a marine mammal school, or the end of the day. 
+#4 - Cumulative Total: You may encounter a situation when the bird abundance is so high that it becomes impossible to 
+    #count and enter individual birds in real time. In these situations, it will be necessary to count birds in blocks 
+    #(as groups of 10's for example) and enter these numbers periodically, at regular intervals (every 5 minutes for example).
+    #Should such a situation arise, the critical data are species identification and species number for each time period. 
+    #You *may* record accurate data for remaining fields, but if time does not allow for this, use distance code 3 
+    #(you should not count any birds if they are farther than 300 meters from the ship), behavior code 6 (for "other", 
+    #and note in the comments field that for this situation you are using this code to indicate that no data on behavior were recorded), and codes for “unknown” for association, age, and sex (3, 1, and 1, respectively). Use code 1 for flight direction to indicate that no flight direction data were recorded.
+    #Because our project will generally be designed to survey birds in oceanic areas (i.e. where bird densities are 
+    #relatively low) you should rarely need to use this code.
+#5 - Off-Effort Sighting: As is the case for an on-effort sighting, you should use this code to indicate a sighting 
 
+#obs=obs[obs$EVENT_CODE!=0,]
+unique(obs$Condition)
+
+#makes Condition a numeric column, calculates lagged difference 
+obs$Condition_num<-as.numeric(obs$Condition)
+obs<-obs %>% group_by(DayID) %>% 
+  dplyr::mutate(condchang_flag = (lag(Condition_num,1)- Condition_num))
+obs$condchang_flag[obs$condchang_flag>0]<-1 #flags changes
+
+obs$Condition-lag(obs$Condition)
 # Create a sequential TRANSECT_ID code that can avoids merge duplication problems inherent in TRANSECT_CODE
 obs[obs$EVENT_CODE==1,"TRANSECT_ID"]=seq(1:nrow(obs[obs$EVENT_CODE==1,]))
 for(i in 2:nrow(obs))
