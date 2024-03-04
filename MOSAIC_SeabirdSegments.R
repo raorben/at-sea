@@ -92,10 +92,40 @@ obs%>%filter(is.na(Longitude))
 # 3. Add TRANSECT ID information to OBSERVATION dataframe based on ON/OFF Tx and changes in "Condition"
 unique(obs$Condition) #"5" "4" "3" "1" "2" NA 
 
-#flag condition changes
-#flag observer changes
-#flag time gaps in GPS crumbs and On/Off
+#amazing code that creates a "flag" column for changes: 
+#"Condition", "Beaufort", "Weather", "On.OffTx", "Type","Obs","ObsSidePS"
+names(obs)
+obs<-obs %>% 
+  group_by(Cruise_ID,DayID) %>% 
+  mutate(across(Condition:ObsSidePS, ~ +(lag(.x, default = first(.x)) != .x), .names = "flag_{col}"))
+
+obs<-obs%>%dplyr::select(-flag_Type)
+
+#flags breaks in GPS crumbs greater than 1 min
+obs<-obs%>%group_by(Cruise_ID,DayID) %>% 
+  mutate(tdiff=datetime-lag(datetime))
+obs$flag_GPScrumb_break<-0
+obs$flag_GPScrumb_break[obs$tdiff>60]<-1
+
 #calculate turning angles and flag angles greater than 10 over a X min period. 
+#TODO!!!
+  
+#compile flags into Flag_EventChange (master flag) & sequentially number segments (TRANSECT_ID)
+obs<-obs %>%
+  mutate(Flag_EventChange = as.numeric(if_any(starts_with("flag_"), ~.x == 1)))
+
+# get the indices of the flags & makes a data.frame of start and end of each transect
+s.sel<-which(obs$Flag_EventChange==1)
+e.sel<-s.sel-1
+
+sel<-data.frame(s.sel=s.sel,e.sel=c(e.sel[2:length(e.sel)],NA))
+head(sel); tail(sel) #check which ones don't work
+
+obs$Transect_ID<-NA
+for (i in 1:(nrow(sel)-1)){
+    obs$Transect_ID[sel$s.sel[i]:sel$e.sel[i]]<-i
+}
+
 
 #drop the EVENT_CODE==0 rows because they mess up the subsequent assignment of TRANSECT_ID
 #Definitions from SEABIRD SURVEY INSTRUCTION MANUAL California Current Ecosystem Survey – CCES - 2018
