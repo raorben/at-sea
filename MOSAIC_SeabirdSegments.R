@@ -101,6 +101,8 @@ obs<-obs %>%
 
 obs<-obs%>%dplyr::select(-flag_Type)
 
+obs<-obs%>%filter(On.OffTx=="ON") #removed off Tx locations
+
 #flags breaks in GPS crumbs greater than 1 min
 obs<-obs%>%group_by(Cruise_ID,DayID) %>% 
   mutate(tdiff=datetime-lag(datetime))
@@ -111,8 +113,10 @@ obs$flag_GPScrumb_break[obs$tdiff>60]<-1
 #TODO!!!
   
 #compile flags into Flag_EventChange (master flag) & sequentially number segments (TRANSECT_ID)
-obs<-obs %>%
+obs1<-obs %>% select(-Beaufort, -Weather, -On.OffTx, -Type,-ObsSidePS)%>%
   mutate(Flag_EventChange = as.numeric(if_any(starts_with("flag_"), ~.x == 1)))
+
+obs<-data.frame(obs,Flag_EventChange=obs1$Flag_EventChange)
 
 # get the indices of the flags & makes a data.frame of start and end of each transect
 s.sel<-which(obs$Flag_EventChange==1)
@@ -149,68 +153,92 @@ for (i in 1:(nrow(sel)-1)){
     #relatively low) you should rarely need to use this code.
 #5 - Off-Effort Sighting: As is the case for an on-effort sighting, you should use this code to indicate a sighting 
 
-#obs=obs[obs$EVENT_CODE!=0,]
-unique(obs$Condition)
-
-#makes Condition a numeric column, calculates lagged difference 
-obs$Condition_num<-as.numeric(obs$Condition)
-obs<-obs %>% group_by(DayID) %>% 
-  dplyr::mutate(condchang_flag = (lag(Condition_num,1)- Condition_num))
-obs$condchang_flag[obs$condchang_flag>0]<-1 #flags changes
-
-obs$Condition-lag(obs$Condition)
-# Create a sequential TRANSECT_ID code that can avoids merge duplication problems inherent in TRANSECT_CODE
-obs[obs$EVENT_CODE==1,"TRANSECT_ID"]=seq(1:nrow(obs[obs$EVENT_CODE==1,]))
-for(i in 2:nrow(obs))
-{if(obs$EVENT_CODE[i]%in%c(2,3))
-{obs[i,"TRANSECT_ID"]=obs[i-1,"TRANSECT_ID"]}}
-#set NAs to 0 avoids errors in selecting transects
-obs[is.na(obs$TRANSECT_ID),"TRANSECT_ID"]=0
+# #obs=obs[obs$EVENT_CODE!=0,]
+# unique(obs$Condition)
+# 
+# #makes Condition a numeric column, calculates lagged difference 
+# obs$Condition_num<-as.numeric(obs$Condition)
+# obs<-obs %>% group_by(DayID) %>% 
+#   dplyr::mutate(condchang_flag = (lag(Condition_num,1)- Condition_num))
+# obs$condchang_flag[obs$condchang_flag>0]<-1 #flags changes
+# 
+# obs$Condition-lag(obs$Condition)
+# # Create a sequential TRANSECT_ID code that can avoids merge duplication problems inherent in TRANSECT_CODE
+# obs[obs$EVENT_CODE==1,"TRANSECT_ID"]=seq(1:nrow(obs[obs$EVENT_CODE==1,]))
+# for(i in 2:nrow(obs))
+# {if(obs$EVENT_CODE[i]%in%c(2,3))
+# {obs[i,"TRANSECT_ID"]=obs[i-1,"TRANSECT_ID"]}}
+# #set NAs to 0 avoids errors in selecting transects
+# obs[is.na(obs$TRANSECT_ID),"TRANSECT_ID"]=0
 
 # Create a table of start LAT, LONG, and LOCAL_DATE_TIME of each TRANSECT 
-TRANSECTS_start=obs[obs$EVENT_CODE==1,c("TRANSECT_ID","LAT","LONG","LOCAL_DATE_TIME")]
-colnames(TRANSECTS_start)=c("TRANSECT_ID","LAT_1","LONG_1","LOCAL_DATE_TIME_1")
-
 # Create a table of end LAT, LONG, and LOCAL_DATE_TIME of each TRANSECT 
-TRANSECTS_stop=obs[obs$EVENT_CODE==3,c("TRANSECT_ID","LAT","LONG","LOCAL_DATE_TIME")]
-colnames(TRANSECTS_stop)=c("TRANSECT_ID","LAT_2","LONG_2","LOCAL_DATE_TIME_2")
-
-# Merge based on TRANSECT_ID to create a horizontal table containing the start and stop coordinates and times of each transect
-TRANSECTS_temp=merge(TRANSECTS_start,TRANSECTS_stop, by="TRANSECT_ID", all.x=TRUE)
-
+# Merge based on TRANSECT_ID to create a horizontal table containing the start 
+# and stop coordinates and times of each transect
 # Calculate DURATION of each TRANSECT in seconds
-TRANSECTS_temp$DURATION=(TRANSECTS_temp$LOCAL_DATE_TIME_2-TRANSECTS_temp$LOCAL_DATE_TIME_1)*24*60*60 # units: seconds
-TRANSECTS_temp[!is.na(TRANSECTS_temp$DURATION) & TRANSECTS_temp$DURATION==0,"DURATION"]=0.00001
+
+A<-obs%>%filter(is.na(Transect_ID)==FALSE)%>%
+  group_by(Cruise_ID,DayID, Transect_ID)%>%
+  summarise(datetime_1=min(datetime),
+            datetime_2=max(datetime))
+
+B<-obs%>%filter(is.na(Transect_ID)==FALSE)%>%
+  group_by(Cruise_ID, DayID, Transect_ID)%>%
+  slice_min(order_by = datetime)%>%
+  select(Cruise_ID,DayID, Transect_ID,datetime, Latitude,Longitude)
+names(B)<-c("Cruise_ID","DayID","Transect_ID","datetime","lat_1","lon_1")
+
+C<-obs%>%filter(is.na(Transect_ID)==FALSE)%>%
+  group_by(Cruise_ID,DayID, Transect_ID)%>%
+  slice_max(order_by = datetime)%>%
+  select(Cruise_ID,DayID, Transect_ID,datetime,Latitude,Longitude)
+names(C)<-c("Cruise_ID","DayID","Transect_ID","datetime","lat_2","lon_2")
+
+T<-left_join(A,B, by=c("Cruise_ID","DayID","Transect_ID", "datetime_1"="datetime"))
+TRANSECTS_temp<-left_join(T,C, by=c("Cruise_ID","DayID","Transect_ID","datetime_2"="datetime"))
+TRANSECTS_temp$duration<-TRANSECTS_temp$datetime_2-TRANSECTS_temp$datetime_1
+remove(A,B,C,T)
+
+
+#TRANSECTS_start=obs[obs$EVENT_CODE==1,c("TRANSECT_ID","LAT","LONG","LOCAL_DATE_TIME")]
+#colnames(TRANSECTS_start)=c("TRANSECT_ID","LAT_1","LONG_1","LOCAL_DATE_TIME_1")
+#TRANSECTS_stop=obs[obs$EVENT_CODE==3,c("TRANSECT_ID","LAT","LONG","LOCAL_DATE_TIME")]
+#colnames(TRANSECTS_stop)=c("TRANSECT_ID","LAT_2","LONG_2","LOCAL_DATE_TIME_2")
+#TRANSECTS_temp=merge(TRANSECTS_start,TRANSECTS_stop, by="TRANSECT_ID", all.x=TRUE)
+#TRANSECTS_temp$DURATION=(TRANSECTS_temp$LOCAL_DATE_TIME_2-TRANSECTS_temp$LOCAL_DATE_TIME_1)*24*60*60 # units: seconds
+#TRANSECTS_temp[!is.na(TRANSECTS_temp$DURATION) & TRANSECTS_temp$DURATION==0,"DURATION"]=0.00001
+
 TRANSECTS_temp=na.omit(TRANSECTS_temp)
 
 # Calculate the geodesic LENGTH of each TRANSECT in meters and based on this measurement to approximate velocity in m/s
-TRANSECTS_temp$LENGTH=distRhumb(TRANSECTS_temp[,c("LONG_1","LAT_1")],TRANSECTS_temp[,c("LONG_2","LAT_2")])
-TRANSECTS_temp$SHIP_VEL_GPS=TRANSECTS_temp$LENGTH/TRANSECTS_temp$DURATION
+TRANSECTS_temp$length=distRhumb(TRANSECTS_temp[,c("lon_1","lat_1")],TRANSECTS_temp[,c("lon_2","lat_2")])
+TRANSECTS_temp$ship_vel_GPS=TRANSECTS_temp$length/as.numeric(TRANSECTS_temp$duration)
 
 # Calculate the geodesic LENGTH of each TRANSECT in meters and based on this measurement to approximate velocity in m/s
-TRANSECTS_temp$HEADING_TRANSECT=geosphere::bearingRhumb(TRANSECTS_temp[,c("LONG_1","LAT_1")],
-                                                        TRANSECTS_temp[,c("LONG_2","LAT_2")])
+TRANSECTS_temp$HEADING_TRANSECT=geosphere::bearingRhumb(TRANSECTS_temp[,c("lon_1","lat_1")],
+                                                        TRANSECTS_temp[,c("lon_2","lat_2")])
 
 
 # Merge the start and stop LAT, LONG, LOCAL_DATE_TIME, LENGTH (m), and DURATION (sec) of each TRANSECT 
 # to all records sharing that unique TRANSECT_ID
-obs=merge(obs,TRANSECTS_temp,by="TRANSECT_ID",all.x=TRUE)
-obs=obs[order(obs$SEQ_ID),]
+obs=merge(obs,TRANSECTS_temp%>%ungroup()%>%select(-Cruise_ID,-DayID),by="Transect_ID",all.x=TRUE)
+names(obs)
+obs=obs[is.na(obs$Transect_ID)==FALSE,]
 
 #Clean-up temporary tables
-remove(TRANSECTS_temp,TRANSECTS_start,TRANSECTS_stop)
+remove(TRANSECTS_temp)
 
 #calculate distance from each OBSERVATION to the starting coordinates of transect (LONG_1,LAT_1)
-obs[!is.na(obs$LONG_1) & !is.na(obs$LONG),"DIST_ORIGIN"]=geosphere::distRhumb(obs[!is.na(obs$LONG_1) & !is.na(obs$LONG),c("LONG_1","LAT_1")],
-                                                                                                         obs[!is.na(obs$LONG_1) & !is.na(obs$LONG),c("LONG","LAT")])
+obs[!is.na(obs$lon_1) & !is.na(obs$Longitude),"DIST_ORIGIN"]=geosphere::distRhumb(obs[!is.na(obs$lon_1) & !is.na(obs$Longitude),c("lon_1","lat_1")],
+                                                                                                         obs[!is.na(obs$lon_1) & !is.na(obs$Longitude),c("Longitude","Latitude")])
 
 
 #calculate HEADING from each OBSERVATION to the starting coordinates of transect (LONG_1,LAT_1)
-obs[!is.na(obs$LONG_1) 
-             & !is.na(obs$LONG),"HEADING_ORIGIN"] <- geosphere::bearingRhumb(obs[!is.na(obs$LONG_1) 
-                                                                                                   & !is.na(obs$LONG),c("LONG_1","LAT_1")],
-                                                                                      obs[!is.na(obs$LONG_1) 
-                                                                                                   & !is.na(obs$LONG),c("LONG","LAT")])
+obs[!is.na(obs$lon_1) 
+             & !is.na(obs$Longitude),"HEADING_ORIGIN"] <- geosphere::bearingRhumb(obs[!is.na(obs$lon_1) 
+                                                                                                   & !is.na(obs$Longitude),c("lon_1","lat_1")],
+                                                                                      obs[!is.na(obs$lon_1) 
+                                                                                                   & !is.na(obs$Longitude),c("Longitude","Latitude")])
 
 
 
@@ -225,86 +253,92 @@ obs$HEADING_DIFF <- obs$HEADING_TRANSECT - obs$HEADING_ORIGIN
 obs$DIST_PERP <- obs$DIST_ORIGIN * abs(sin(obs$HEADING_DIFF * pi/180))
 
 
+obs$DIST_PERP_MED<-NA
+obs$DIST_PERP_MEAN<-NA
+
+summary(obs$Transect_ID)
 # calculate the mean and median perpendicular distance (DIST_PERP) within each TRANSECT
-for(i in unique(obs$TRANSECT_ID)){
-  obs[obs$TRANSECT_ID == i,"DIST_PERP_MED"] <- median(obs[obs$TRANSECT_ID == i,"DIST_PERP"],na.rm = T)
-  obs[obs$TRANSECT_ID == i,"DIST_PERP_MEAN"] <- mean(obs[obs$TRANSECT_ID == i,"DIST_PERP"],na.rm = T)
+for(i in unique(obs$Transect_ID)){
+  obs[obs$Transect_ID == i,"DIST_PERP_MED"] <- median(obs[obs$Transect_ID == i,"DIST_PERP"],na.rm = T)
+  obs[obs$Transect_ID == i,"DIST_PERP_MEAN"] <- mean(obs[obs$Transect_ID == i,"DIST_PERP"],na.rm = T)
 }
 remove(i)
 
 #Set SPP_NUMBERs == 0 to NA (relict of 1988 sampling only)
-obs[!is.na(obs$SPP_NUMBER) & obs$SPP_NUMBER==0 ,c("SPP_NUMBER")]=NA
+#obs[!is.na(obs$SPP_NUMBER) & obs$SPP_NUMBER==0 ,c("SPP_NUMBER")]=NA
 
 # Standardize the length of SPP_CODE
 
-obs$SPP_CODE=str_trim(as.character(obs$SPP_CODE))
+#obs$SPP_CODE=str_trim(as.character(obs$SPP_CODE))
 
-obs=obs[order(obs$SEQ_ID),]
-obs=obs[!duplicated(obs$SEQ_ID),]
-rownames(obs)=obs$SEQ_ID
+#obs=obs[order(obs$SEQ_ID),]
+#obs=obs[!duplicated(obs$SEQ_ID),]
+#rownames(obs)=obs$SEQ_ID
 
 #### TRANSECTS ####
 
 #For each FLOCK_ID string together and take counts of the different seabird and marine mammals in
 #association with each feeding flock
-TRANSECTS=obs[obs$EVENT_CODE==1,]
+#TRANSECTS=obs[obs$EVENT_CODE==1,]
+TRANSECTS=obs%>%filter(is.na(Species)==FALSE)
 
 #Calculate TRANSECT mid-points by averaging LAT_1,LONG_1 and LAT_2,LONG_2, substitute one or the other end point if either
 #value is NA (approximate coordinates are better than no coordinates for plotting)
-TRANSECTS$LAT_MID=ifelse(!is.na(TRANSECTS$LAT_1) & !is.na(TRANSECTS$LAT_2),(TRANSECTS$LAT_1+TRANSECTS$LAT_2)/2,
-                         ifelse(!is.na(TRANSECTS$LAT_1),TRANSECTS$LAT_1,TRANSECTS$LAT_2))
-TRANSECTS$LONG_MID=ifelse(!is.na(TRANSECTS$LONG_1) & !is.na(TRANSECTS$LONG_2),(TRANSECTS$LONG_1+TRANSECTS$LONG_2)/2,
-                          ifelse(!is.na(TRANSECTS$LONG_1),TRANSECTS$LONG_1,TRANSECTS$LONG_2))
+TRANSECTS$lat_MID=ifelse(!is.na(TRANSECTS$lat_1) & !is.na(TRANSECTS$lat_2),(TRANSECTS$lat_1+TRANSECTS$lat_2)/2,
+                         ifelse(!is.na(TRANSECTS$lat_1),TRANSECTS$lat_1,TRANSECTS$lat_2))
+TRANSECTS$lon_MID=ifelse(!is.na(TRANSECTS$lon_1) & !is.na(TRANSECTS$lon_2),(TRANSECTS$lon_1+TRANSECTS$lon_2)/2,
+                          ifelse(!is.na(TRANSECTS$lon_1),TRANSECTS$lon_1,TRANSECTS$lon_2))
 
 #Assign each transect to a 1 degree LAT_LONG_CODE grid cell for displaying gridded mean densities at a variety of resolutions
-TRANSECTS$LAT_LONG_CODE=ifelse(TRANSECTS$LAT_MID>=0,paste(floor(TRANSECTS$LAT_MID),"_",ceiling(TRANSECTS$LONG_MID),sep=""),
-                               paste("-",ceiling(TRANSECTS$LAT_MID)*-1,"_",ceiling(TRANSECTS$LONG_MID),sep=""))
+TRANSECTS$LAT_LONG_CODE=ifelse(TRANSECTS$lat_MID>=0,paste(floor(TRANSECTS$lat_MID),"_",ceiling(TRANSECTS$lon_MID),sep=""),
+                               paste("-",ceiling(TRANSECTS$lon_MID)*-1,"_",ceiling(TRANSECTS$lon_MID),sep=""))
 
 #Select the first LAT,LONG, and LOCAL_DATE_TIME of each CRUISE_DAY and merge this back to TRANSECTS
-CRUISE_DAY=obs[!duplicated(obs$CRUISE_DAY) & !is.na(obs$LAT),c("CRUISE_DAY","LAT","LONG","LOCAL_DATE_TIME")]
-colnames(CRUISE_DAY)=c("CRUISE_DAY","LAT_3","LONG_3","LOCAL_DATE_TIME_3")
-TRANSECTS=merge(TRANSECTS, CRUISE_DAY,by="CRUISE_DAY",all.x=TRUE)
+#CRUISE_DAY=obs[!duplicated(obs$CRUISE_DAY) & !is.na(obs$LAT),c("CRUISE_DAY","LAT","LONG","LOCAL_DATE_TIME")]
+#colnames(CRUISE_DAY)=c("CRUISE_DAY","LAT_3","LONG_3","LOCAL_DATE_TIME_3")
+#TRANSECTS=merge(TRANSECTS, CRUISE_DAY,by="CRUISE_DAY",all.x=TRUE)
 
 #Select the last LAT,LONG, and LOCAL_DATE_TIME of each CRUISE_DAY and merge this back to TRANSECTS
-CRUISE_DAY=obs[rev(!duplicated(rev(obs$CRUISE_DAY))) & !is.na(obs$LAT),c("CRUISE_DAY","LAT","LONG","LOCAL_DATE_TIME")]
-colnames(CRUISE_DAY)=c("CRUISE_DAY","LAT_4","LONG_4","LOCAL_DATE_TIME_4")
-TRANSECTS=merge(TRANSECTS, CRUISE_DAY,by="CRUISE_DAY",all.x=TRUE)
+#CRUISE_DAY=obs[rev(!duplicated(rev(obs$CRUISE_DAY))) & !is.na(obs$LAT),c("CRUISE_DAY","LAT","LONG","LOCAL_DATE_TIME")]
+#colnames(CRUISE_DAY)=c("CRUISE_DAY","LAT_4","LONG_4","LOCAL_DATE_TIME_4")
+#TRANSECTS=merge(TRANSECTS, CRUISE_DAY,by="CRUISE_DAY",all.x=TRUE)
 
 remove(CRUISE_DAY)
 
 #Re-order TRANSECTS by SEQ_ID
 TRANSECTS=TRANSECTS[order(TRANSECTS$SEQ_ID),]
 
-#Calculate variable strip WIDTHS and AREAS based on OBS_COND and bird size class (LG - shearwaters, boobies, etc. 
+#Calculate variable strip WIDTHS and AREAS based on Condition and bird size class (LG - shearwaters, boobies, etc. 
 #SM - phalaropes, storm-petrels, small auklets)
-TRANSECTS$WIDTH_LG=ifelse(TRANSECTS$OBS_COND>=3,300,200)
-TRANSECTS$WIDTH_LG=ifelse(TRANSECTS$OBS_COND>=3,300,200)
-TRANSECTS$WIDTH_SM=ifelse(TRANSECTS$OBS_COND>=4,300,ifelse(TRANSECTS$OBS_COND>=2,200,100))
-TRANSECTS$AREA_LG=TRANSECTS$WIDTH_LG*TRANSECTS$LENGTH
-TRANSECTS$AREA_SM=TRANSECTS$WIDTH_SM*TRANSECTS$LENGTH
+TRANSECTS$WIDTH_LG=ifelse(TRANSECTS$Condition>=3,300,200)
+TRANSECTS$WIDTH_LG=ifelse(TRANSECTS$Condition>=3,300,200)
+TRANSECTS$WIDTH_SM=ifelse(TRANSECTS$Condition>=4,300,ifelse(TRANSECTS$Condition>=2,200,100))
+TRANSECTS$AREA_LG=TRANSECTS$WIDTH_LG*TRANSECTS$length
+TRANSECTS$AREA_SM=TRANSECTS$WIDTH_SM*TRANSECTS$length
 
-#Compile text variable separated by commas of all SPP_CODE, SPP_NUMBER, and DISTANCE falling within each TRANSECT_ID
-for(i in unique(TRANSECTS$TRANSECT_ID))
-{ TRANSECTS[TRANSECTS$TRANSECT_ID==i,
-            "SPP_CODE_ALL"]=paste(obs[obs$TRANSECT_ID==i
-                                               & !is.na(obs$SPP_NUMBER),"SPP_CODE"],collapse=",")
-TRANSECTS[TRANSECTS$TRANSECT_ID==i,
-          "SPP_NUMBER_ALL"]=paste(obs[obs$TRANSECT_ID==i
-                                               & !is.na(obs$SPP_NUMBER),"SPP_NUMBER"],collapse=",")
-TRANSECTS[TRANSECTS$TRANSECT_ID==i,
-          "DISTANCE_ALL"]=paste(obs[obs$TRANSECT_ID==i
+#Compile text variable separated by commas of all SPP_CODE, SPP_NUMBER, and DISTANCE falling within each Transect_ID
+for(i in unique(TRANSECTS$Transect_ID))
+{ TRANSECTS[TRANSECTS$Transect_ID==i,
+            "Species"]=paste(obs[obs$Transect_ID==i
+                                               & !is.na(obs$SPP_NUMBER),"Species"],collapse=",")
+TRANSECTS[TRANSECTS$Transect_ID==i,
+          "Count"]=paste(obs[obs$Transect_ID==i
+                                               & !is.na(obs$SPP_NUMBER),"Count"],collapse=",")
+TRANSECTS[TRANSECTS$Transect_ID==i,
+          "DISTANCE_ALL"]=paste(obs[obs$Transect_ID==i
                                              & !is.na(obs$SPP_NUMBER),"DISTANCE"],collapse=",")}
 
 
 #Create a list object TRANSECTS_ALL composed of dataframes corresponding to each strip transect observation 
 #in a given TRANSECT with associated LAT,LONG, and distance information. This list can be efficiently queried using lapply.
+names(TRANSECTS)
 TRANSECTS_ALL=mapply(cbind, 
-                     SPP_CODE=strsplit(TRANSECTS$SPP_CODE_ALL,","),
-                     SPP_NUMBER=strsplit(TRANSECTS$SPP_NUMBER_ALL,","),
+                     Species=strsplit(TRANSECTS$Species,","),
+                     Count=strsplit(TRANSECTS$Count,","),
                      DISTANCE=strsplit(TRANSECTS$DISTANCE_ALL,","),
-                     LONG_MID=TRANSECTS$LONG_MID,
-                     LAT_MID=TRANSECTS$LAT_MID,
-                     OBS_COND=TRANSECTS$OBS_COND,
+                     LONG_MID=TRANSECTS$lon_MID,
+                     lat_MID=TRANSECTS$lat_MID,
+                     Condition=TRANSECTS$Condition,
                      WIDTH_LG=TRANSECTS$WIDTH_LG,
                      WIDTH_SM=TRANSECTS$WIDTH_SM)
 
@@ -314,76 +348,76 @@ SPP_CODES_LG_temp = SEABIRD_CODES[SEABIRD_CODES$AOU_CODE!="" & SEABIRD_CODES$Siz
 SPP_CODES_SM_temp = SEABIRD_CODES[SEABIRD_CODES$AOU_CODE!="" & SEABIRD_CODES$Size == "Sm","SPP_CODE"][which(SEABIRD_CODES[SEABIRD_CODES$AOU_CODE!="" & SEABIRD_CODES$Size == "Sm","SPP_CODE"]%in%unique(obs[obs$DISTANCE<=3,"SPP_CODE"]))]
 SPP_CODES_AMBIG_temp = SEABIRD_CODES[SEABIRD_CODES$AOU_CODE=="","SPP_CODE"][which(SEABIRD_CODES[SEABIRD_CODES$AOU_CODE=="","SPP_CODE"]%in%unique(obs[obs$DISTANCE<=3,"SPP_CODE"]))]
 
-#Sum SPP_NUMBERs for different species within each TRANSECT_ID
+#Sum SPP_NUMBERs for different species within each Transect_ID
 for(i in SPP_CODES_LG_temp)
 {TRANSECTS[,paste(i,"_COUNT",sep="")]=do.call(rbind, lapply(TRANSECTS_ALL,function(x) 
   sum(as.numeric(x[x$SPP_CODE%in%c(i) & x$DISTANCE <= (as.numeric(x$WIDTH_LG)/100),"SPP_NUMBER"]),na.rm=T)))}
 
-#Sum SPP_NUMBERs for different species within each TRANSECT_ID
+#Sum SPP_NUMBERs for different species within each Transect_ID
 for(i in SPP_CODES_SM_temp)
 {TRANSECTS[,paste(i,"_COUNT",sep="")]=do.call(rbind, lapply(TRANSECTS_ALL,function(x) 
   sum(as.numeric(x[x$SPP_CODE%in%c(i) & x$DISTANCE <= (as.numeric(x$WIDTH_SM)/100),"SPP_NUMBER"]),na.rm=T)))}
 
-#Sum SPP_NUMBERs for different species within each TRANSECT_ID
+#Sum SPP_NUMBERs for different species within each Transect_ID
 for(i in SPP_CODES_AMBIG_temp)
 {TRANSECTS[,paste(i,"_COUNT",sep="")]=do.call(rbind, lapply(TRANSECTS_ALL,function(x) 
   sum(as.numeric(x[x$SPP_CODE%in%c(i) & x$DISTANCE <= (as.numeric(x$WIDTH_LG)/100),"SPP_NUMBER"]),na.rm=T)))}
 
 
 #### SEGMENTS ####
-#This block of code subdivides transects into SEGMENTS of 4000m or less, 
+#This block of code subdivides transects into SEGMENTS of 5000m or less, 
 #it then assigns seabirds to those SEGMENTS
 
 SEGMENTS=data.frame()
 
-#duplicate each TRANSECTS row by the number of multiples of SEGMENT length (i.e. 4000m) and then append to SEGMENTS
+#duplicate each TRANSECTS row by the number of multiples of SEGMENT length (i.e. 5000m) and then append to SEGMENTS
 #also remove all columns past SPP_CODE_ALL (these will be added again on a per SEGMENT basis)
 for(i in which(!is.na(TRANSECTS$LENGTH) 
                & TRANSECTS$LENGTH > 0
                & !is.na(TRANSECTS$DIST_PERP_MEAN) 
                & TRANSECTS$DIST_PERP_MEAN <= 300))
 {SEGMENTS=rbind(SEGMENTS,
-                cbind(TRANSECTS[i,1:(which(colnames(TRANSECTS)=="SPP_CODE_ALL")-1)][rep(1,ceiling(TRANSECTS[i,"LENGTH"]/4000)),],
-                      data.frame(SEG_ID=seq(1,ceiling(TRANSECTS[i,"LENGTH"]/4000)))))}
+                cbind(TRANSECTS[i,1:(which(colnames(TRANSECTS)=="SPP_CODE_ALL")-1)][rep(1,ceiling(TRANSECTS[i,"LENGTH"]/5000)),],
+                      data.frame(SEG_ID=seq(1,ceiling(TRANSECTS[i,"LENGTH"]/5000)))))}
 
 
-#Assign segment lengths (SEG_LENGTH) either the full length if less than 4000m or 4000m and sliver 
-for(i in unique(SEGMENTS$TRANSECT_ID)){ 
-  if(SEGMENTS[SEGMENTS$TRANSECT_ID==i,"LENGTH"][1]<=4000){
-    SEGMENTS[SEGMENTS$TRANSECT_ID==i,"SEG_LENGTH"]=SEGMENTS[SEGMENTS$TRANSECT_ID==i,"LENGTH"][1]
+#Assign segment lengths (SEG_LENGTH) either the full length if less than 5000m or 5000m and sliver 
+for(i in unique(SEGMENTS$Transect_ID)){ 
+  if(SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]<=5000){
+    SEGMENTS[SEGMENTS$Transect_ID==i,"SEG_LENGTH"]=SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]
   }
   
-  if(SEGMENTS[SEGMENTS$TRANSECT_ID==i,"LENGTH"][1]>4000){ 
+  if(SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]>5000){ 
     # Create a vector of segments lengths where the vector length is 
     # equal to the number of times the TRANSECT length 
-    # evenly divides into the SEGMENT length (i.e. 4000m) 
+    # evenly divides into the SEGMENT length (i.e. 5000m) 
     # and add any modulus (%%) at the end 
-    SEG_LENGTH_temp  = c(rep(4000,SEGMENTS[SEGMENTS$TRANSECT_ID==i,"LENGTH"][1]%/%4000),
-                         SEGMENTS[SEGMENTS$TRANSECT_ID==i,"LENGTH"][1]%%4000)
+    SEG_LENGTH_temp  = c(rep(5000,SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]%/%5000),
+                         SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]%%5000)
     
     # Randomize the order of segment lengths (sample without replacement)
     SEG_LENGTH_temp = sample(SEG_LENGTH_temp,replace = F)
     
-    #Assign each SEGMENT in TRANSECT_ID i a SEGMENT_LENGTH
-    SEGMENTS[SEGMENTS$TRANSECT_ID==i,"SEG_LENGTH"]=SEG_LENGTH_temp
+    #Assign each SEGMENT in Transect_ID i a SEGMENT_LENGTH
+    SEGMENTS[SEGMENTS$Transect_ID==i,"SEG_LENGTH"]=SEG_LENGTH_temp
   }
   
-  # If a modulus segment ("sliver") after subdividing a transect of >4000m
+  # If a modulus segment ("sliver") after subdividing a transect of >5000m
   # is less than 1/2 of target segment length (i.e.,2000m)
   # add this segment to the prior or the subsequent segment
   # (short segments will then be removed outside this loop)
-  if(any(SEGMENTS[SEGMENTS$TRANSECT_ID==i,"LENGTH"]>4000
-         & SEGMENTS[SEGMENTS$TRANSECT_ID==i,"SEG_LENGTH"]<2000)){
+  if(any(SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"]>5000
+         & SEGMENTS[SEGMENTS$Transect_ID==i,"SEG_LENGTH"]<2000)){
     
     # identify index numbers of short segments
-    SLIVER_INDEX_temp = which(SEGMENTS$TRANSECT_ID==i & SEGMENTS$SEG_LENGTH<2000)
+    SLIVER_INDEX_temp = which(SEGMENTS$Transect_ID==i & SEGMENTS$SEG_LENGTH<2000)
     
-    # if sliver is the first segment in TRANSECT_ID==i add sliver SEG_LENGTH to the subsequent segment SEG_LENGTH
+    # if sliver is the first segment in Transect_ID==i add sliver SEG_LENGTH to the subsequent segment SEG_LENGTH
     if(SEGMENTS[SLIVER_INDEX_temp,"SEG_ID"]==1){
       SEGMENTS[SLIVER_INDEX_temp+1,"SEG_LENGTH"] <- SEGMENTS[SLIVER_INDEX_temp+1,"SEG_LENGTH"] + SEGMENTS[SLIVER_INDEX_temp,"SEG_LENGTH"]
     }
     
-    # if sliver is not the first segment in TRANSECT_ID==i add sliver SEG_LENGTH to the prior segment SEG_LENGTH
+    # if sliver is not the first segment in Transect_ID==i add sliver SEG_LENGTH to the prior segment SEG_LENGTH
     if(SEGMENTS[SLIVER_INDEX_temp,"SEG_ID"]>1){
       SEGMENTS[SLIVER_INDEX_temp-1,"SEG_LENGTH"] <- SEGMENTS[SLIVER_INDEX_temp-1,"SEG_LENGTH"] + SEGMENTS[SLIVER_INDEX_temp,"SEG_LENGTH"]
     }
@@ -396,17 +430,17 @@ for(i in unique(SEGMENTS$TRANSECT_ID)){
 remove(SEG_LENGTH_temp, SLIVER_INDEX_temp, i)
 
 # remove short SEGMENTS (<1/2 of target segment length i.e.,2000m)
-SEGMENTS <- SEGMENTS[(-1*which(SEGMENTS$LENGTH > 4000 
+SEGMENTS <- SEGMENTS[(-1*which(SEGMENTS$LENGTH > 5000 
                                & SEGMENTS$SEG_LENGTH < 2000)), ]
 
 # reorder SEG_ID's after removing sliver segments 
-for(i in unique(SEGMENTS$TRANSECT_ID)){ 
-  SEGMENTS[SEGMENTS$TRANSECT_ID == i,"SEG_ID"] <- seq(1,nrow(SEGMENTS[SEGMENTS$TRANSECT_ID == i,])) 
+for(i in unique(SEGMENTS$Transect_ID)){ 
+  SEGMENTS[SEGMENTS$Transect_ID == i,"SEG_ID"] <- seq(1,nrow(SEGMENTS[SEGMENTS$Transect_ID == i,])) 
 }  
 
 #Calculate the distance between the start of each TRANSECT and the end of each SEGMENT by summing segment lengths cumulatively (SEG_LENGTH_END)
 library(dplyr)
-SEGMENTS = mutate(group_by(SEGMENTS,TRANSECT_ID), SEG_LENGTH_END=cumsum(SEG_LENGTH))
+SEGMENTS = mutate(group_by(SEGMENTS,Transect_ID), SEG_LENGTH_END=cumsum(SEG_LENGTH))
 
 #Calculate the distance between the start of each TRANSECT and the start of each SEGMENT by subtracting SEG_LENGTH from the SEG_LENGTH_END variable 
 SEGMENTS$SEG_LENGTH_START=SEGMENTS$SEG_LENGTH_END-SEGMENTS$SEG_LENGTH
@@ -448,25 +482,25 @@ SEGMENTS[SEGMENTS$SEG_ID==i,c("LONG_6","LAT_6")]=destPointRhumb(p = SEGMENTS[SEG
 }
 
 #Create unique SEG_ID's by pasting SEG_ID (number 1:22)
-SEGMENTS$SEG_ID=paste(SEGMENTS$TRANSECT_ID,SEGMENTS$SEG_ID,sep="_")
+SEGMENTS$SEG_ID=paste(SEGMENTS$Transect_ID,SEGMENTS$SEG_ID,sep="_")
 
 
 
 #Compile text variable separated by commas of all SPP_CODE, SPP_NUMBER, and DISTANCE falling within each SEG_ID
 for(i in 1:nrow(SEGMENTS))
-{ SEGMENTS[i,"SPP_CODE_ALL"]=paste(obs[obs$TRANSECT_ID%in%SEGMENTS$TRANSECT_ID[i]
+{ SEGMENTS[i,"SPP_CODE_ALL"]=paste(obs[obs$Transect_ID%in%SEGMENTS$Transect_ID[i]
                                                 & obs$DIST_ORIGIN>=SEGMENTS$SEG_LENGTH_START[i]
                                                 & obs$DIST_ORIGIN<SEGMENTS$SEG_LENGTH_END[i]
                                                 & !is.na(obs$SPP_NUMBER),"SPP_CODE"],collapse=",")
-SEGMENTS[i,"SPP_NUMBER_ALL"]=paste(obs[obs$TRANSECT_ID%in%SEGMENTS$TRANSECT_ID[i]
+SEGMENTS[i,"SPP_NUMBER_ALL"]=paste(obs[obs$Transect_ID%in%SEGMENTS$Transect_ID[i]
                                                 & obs$DIST_ORIGIN>=SEGMENTS$SEG_LENGTH_START[i]
                                                 & obs$DIST_ORIGIN<SEGMENTS$SEG_LENGTH_END[i]
                                                 & !is.na(obs$SPP_NUMBER),"SPP_NUMBER"],collapse=",")
-SEGMENTS[i,"DISTANCE_ALL"]=paste(obs[obs$TRANSECT_ID%in%SEGMENTS$TRANSECT_ID[i]
+SEGMENTS[i,"DISTANCE_ALL"]=paste(obs[obs$Transect_ID%in%SEGMENTS$Transect_ID[i]
                                               & obs$DIST_ORIGIN>=SEGMENTS$SEG_LENGTH_START[i]
                                               & obs$DIST_ORIGIN<SEGMENTS$SEG_LENGTH_END[i]
                                               & !is.na(obs$SPP_NUMBER),"DISTANCE"],collapse=",")
-SEGMENTS[i,"DIST_ORIGIN_ALL"]=paste(round(obs[obs$TRANSECT_ID%in%SEGMENTS$TRANSECT_ID[i]
+SEGMENTS[i,"DIST_ORIGIN_ALL"]=paste(round(obs[obs$Transect_ID%in%SEGMENTS$Transect_ID[i]
                                                        & obs$DIST_ORIGIN>=SEGMENTS$SEG_LENGTH_START[i]
                                                        & obs$DIST_ORIGIN<SEGMENTS$SEG_LENGTH_END[i]
                                                        & !is.na(obs$SPP_NUMBER),"DIST_ORIGIN"],0),collapse=",")}
@@ -515,7 +549,7 @@ for(i in SPP_CODES_AMBIG_temp)
 #Gather necessary columns from SEGMENTS to recreate example data table structure provided by Jeffery Leirness
 #surveyID	transectID	segmentID	platform	year	month	day	hours	minutes	seconds	seaState	
 #segLengthKM	segWidthKM	longitude	latitude
-EXPORT=subset(SEGMENTS,select=c(CRUISE,TRANSECT_ID,SEG_ID,
+EXPORT=subset(SEGMENTS,select=c(CRUISE,Transect_ID,SEG_ID,
                                 LM_YEAR,LM_MONTH,LM_DAY,LM_HOUR,LM_MIN,LM_SEC,SEG_DATE_TIME_MID,
                                 BEAUFORT,SEG_LENGTH,WIDTH_LG,WIDTH_SM,
                                 LONG_5,LAT_5,LONG_6,LAT_6))
@@ -526,8 +560,8 @@ EXPORT[EXPORT$LM_YEAR%in%c(2005),"surveyID"]="CSCAPE"
 EXPORT[EXPORT$LM_YEAR%in%c(2014),"surveyID"]="CalCurCEAS"
 EXPORT$surveyID=paste(EXPORT$surveyID,EXPORT$LM_YEAR,sep="")
 
-#Create transectID column by pasting together surveyID column with unique TRANSECT_ID column
-EXPORT$transectID=paste(EXPORT$surveyID,sprintf("%04d",EXPORT$TRANSECT_ID),sep="_")
+#Create transectID column by pasting together surveyID column with unique Transect_ID column
+EXPORT$transectID=paste(EXPORT$surveyID,sprintf("%04d",EXPORT$Transect_ID),sep="_")
 
 #Create segmentID column by pasting together transectID column with unique SEG_ID column
 library(stringr)
@@ -693,7 +727,7 @@ EXPORT$JAPL = SEGMENTS$JAPL
 # #### EXPORT_PaCSEA ####
 # 
 # #Import formatted and segmented PaCSEA dataset from USGS (Josh Adams and Jonathan Felis)
-# EXPORT_PaCSEA=read.csv(paste(DATA_DIR,"PaCSEA/","PaCSEA_4000mCentroids.csv",sep = ""))
+# EXPORT_PaCSEA=read.csv(paste(DATA_DIR,"PaCSEA/","PaCSEA_5000mCentroids.csv",sep = ""))
 # 
 # #Assign segWidthKM accross segment width for large and small seabird (segWidth_Sm_KM ,segWidth_Lg_KM) columns
 # #(this distinction does not exist in aerial data)
@@ -714,7 +748,7 @@ EXPORT$JAPL = SEGMENTS$JAPL
 # #### EXPORT_SoCA ####
 # 
 # #Import formatted and segmented SoCA dataset from USGS (Josh Adams and Jonathan Felis)
-# EXPORT_SoCA=read.csv(paste(DATA_DIR,"SoCA/","SoCA_4000mCentroids.csv",sep = ""))
+# EXPORT_SoCA=read.csv(paste(DATA_DIR,"SoCA/","SoCA_5000mCentroids.csv",sep = ""))
 # 
 # #Assign segWidthKM accross segment width for large and small seabird (segWidth_Sm_KM ,segWidth_Lg_KM) columns
 # #(this distinction does not exist in aerial data)
@@ -775,15 +809,15 @@ TRANSECTS_SYDEMAN$LM_MIN= as.numeric(stringr::str_sub(floor(TRANSECTS_SYDEMAN$Ti
 TRANSECTS_SYDEMAN$LM_SEC= (TRANSECTS_SYDEMAN$Time..sec.- floor(TRANSECTS_SYDEMAN$Time..sec.))*60
 
 for(i in unique(TRANSECTS_SYDEMAN[!is.na(TRANSECTS_SYDEMAN$LM_YEAR),"LM_YEAR"]))
-{TRANSECTS_SYDEMAN[!is.na(TRANSECTS_SYDEMAN$LM_YEAR) & TRANSECTS_SYDEMAN$LM_YEAR == i,"TRANSECT_ID"] = seq(1,nrow(TRANSECTS_SYDEMAN[!is.na(TRANSECTS_SYDEMAN$LM_YEAR) & TRANSECTS_SYDEMAN$LM_YEAR == i,]))}
+{TRANSECTS_SYDEMAN[!is.na(TRANSECTS_SYDEMAN$LM_YEAR) & TRANSECTS_SYDEMAN$LM_YEAR == i,"Transect_ID"] = seq(1,nrow(TRANSECTS_SYDEMAN[!is.na(TRANSECTS_SYDEMAN$LM_YEAR) & TRANSECTS_SYDEMAN$LM_YEAR == i,]))}
 
 TRANSECTS_SYDEMAN$SEG_ID = 1
 
 #Create surveyID column with names of surveys by year
 TRANSECTS_SYDEMAN$surveyID = paste(TRANSECTS_SYDEMAN$SVY,TRANSECTS_SYDEMAN$LM_YEAR,sep = "")
 
-#Create transectID column by pasting together surveyID column with unique TRANSECT_ID column
-TRANSECTS_SYDEMAN$transectID=paste(TRANSECTS_SYDEMAN$surveyID,sprintf("%04d",TRANSECTS_SYDEMAN$TRANSECT_ID),sep="_")
+#Create transectID column by pasting together surveyID column with unique Transect_ID column
+TRANSECTS_SYDEMAN$transectID=paste(TRANSECTS_SYDEMAN$surveyID,sprintf("%04d",TRANSECTS_SYDEMAN$Transect_ID),sep="_")
 
 #Create segmentID column by pasting together transectID column with unique SEG_ID column
 library(stringr)
@@ -844,12 +878,12 @@ SPP_CODES_SYDEMAN_temp = SPP_CODES_SYDEMAN_temp[SPP_CODES_SYDEMAN_temp%in%AOU_CO
 SPP_CODES_SYDEMAN_AMBIG_temp = unique(SPP_CODES_SYDEMAN[SPP_CODES_SYDEMAN$Seabird. == 1,"Sydeman.Codes"])[unique(SPP_CODES_SYDEMAN[SPP_CODES_SYDEMAN$Seabird. == 1,"Sydeman.Codes"])%in%obs_SYDEMAN$Species]
 SPP_CODES_SYDEMAN_AMBIG_temp = SPP_CODES_SYDEMAN_AMBIG_temp[!SPP_CODES_SYDEMAN_AMBIG_temp%in%AOU_CODES$SPEC]
 
-#Sum SPP_NUMBERs for different species within each TRANSECT_ID
+#Sum SPP_NUMBERs for different species within each Transect_ID
 for(i in SPP_CODES_SYDEMAN_temp)
 {TRANSECTS_SYDEMAN[,i]=do.call(rbind, lapply(TRANSECTS_SYDEMAN_ALL,function(x) 
   sum(as.numeric(x[x$SPP_CODE%in%c(i),"SPP_NUMBER"]),na.rm=T)))}
 
-#Sum SPP_NUMBERs for different species within each TRANSECT_ID
+#Sum SPP_NUMBERs for different species within each Transect_ID
 for(i in SPP_CODES_SYDEMAN_AMBIG_temp)
 {TRANSECTS_SYDEMAN[,i]=do.call(rbind, lapply(TRANSECTS_SYDEMAN_ALL,function(x) 
   sum(as.numeric(x[x$SPP_CODE%in%c(i),"SPP_NUMBER"]),na.rm=T)))}
