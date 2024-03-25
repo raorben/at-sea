@@ -401,28 +401,28 @@ SEGMENTS=data.frame()
 
 #duplicate each TRANSECTS row by the number of multiples of SEGMENT length (i.e. 5000m) and then append to SEGMENTS
 #also remove all columns past SPP_CODE_ALL (these will be added again on a per SEGMENT basis)
-for(i in which(!is.na(TRANSECTS$LENGTH) 
-               & TRANSECTS$LENGTH > 0
+for(i in which(!is.na(TRANSECTS$length) 
+               & TRANSECTS$length > 0
                & !is.na(TRANSECTS$DIST_PERP_MEAN) 
-               & TRANSECTS$DIST_PERP_MEAN <= 300))
-{SEGMENTS=rbind(SEGMENTS,
-                cbind(TRANSECTS[i,1:(which(colnames(TRANSECTS)=="SPP_CODE_ALL")-1)][rep(1,ceiling(TRANSECTS[i,"LENGTH"]/5000)),],
-                      data.frame(SEG_ID=seq(1,ceiling(TRANSECTS[i,"LENGTH"]/5000)))))}
+               & TRANSECTS$DIST_PERP_MEAN <= 300)){
+  SEGMENTS=rbind(SEGMENTS,
+                cbind(TRANSECTS[i,1:(which(colnames(TRANSECTS)=="SPP_CODE_ALL")-1)][rep(1,ceiling(TRANSECTS[i,"length"]/5000)),],
+                      data.frame(SEG_ID=seq(1,ceiling(TRANSECTS[i,"length"]/5000)))))}
 
 
 #Assign segment lengths (SEG_LENGTH) either the full length if less than 5000m or 5000m and sliver 
 for(i in unique(SEGMENTS$Transect_ID)){ 
-  if(SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]<=5000){
-    SEGMENTS[SEGMENTS$Transect_ID==i,"SEG_LENGTH"]=SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]
+  if(SEGMENTS[SEGMENTS$Transect_ID==i,"length"][1]<=5000){
+    SEGMENTS[SEGMENTS$Transect_ID==i,"SEG_LENGTH"]=SEGMENTS[SEGMENTS$Transect_ID==i,"length"][1]
   }
   
-  if(SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]>5000){ 
+  if(SEGMENTS[SEGMENTS$Transect_ID==i,"length"][1]>5000){ 
     # Create a vector of segments lengths where the vector length is 
     # equal to the number of times the TRANSECT length 
     # evenly divides into the SEGMENT length (i.e. 5000m) 
     # and add any modulus (%%) at the end 
-    SEG_LENGTH_temp  = c(rep(5000,SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]%/%5000),
-                         SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"][1]%%5000)
+    SEG_LENGTH_temp  = c(rep(5000,SEGMENTS[SEGMENTS$Transect_ID==i,"length"][1]%/%5000),
+                         SEGMENTS[SEGMENTS$Transect_ID==i,"length"][1]%%5000)
     
     # Randomize the order of segment lengths (sample without replacement)
     SEG_LENGTH_temp = sample(SEG_LENGTH_temp,replace = F)
@@ -435,7 +435,7 @@ for(i in unique(SEGMENTS$Transect_ID)){
   # is less than 1/2 of target segment length (i.e.,2000m)
   # add this segment to the prior or the subsequent segment
   # (short segments will then be removed outside this loop)
-  if(any(SEGMENTS[SEGMENTS$Transect_ID==i,"LENGTH"]>5000
+  if(any(SEGMENTS[SEGMENTS$Transect_ID==i,"length"]>5000
          & SEGMENTS[SEGMENTS$Transect_ID==i,"SEG_LENGTH"]<2000)){
     
     # identify index numbers of short segments
@@ -517,7 +517,7 @@ SEGMENTS$SEG_ID=paste(SEGMENTS$Transect_ID,SEGMENTS$SEG_ID,sep="_")
 
 #Compile text variable separated by commas of all SPP_CODE, SPP_NUMBER, and DISTANCE falling within each SEG_ID
 for(i in 1:nrow(SEGMENTS))
-{ SEGMENTS[i,"SPP_CODE_ALL"]=paste(obs[obs$Transect_ID%in%SEGMENTS$Transect_ID[i]
+{SEGMENTS[i,"SPP_CODE_ALL"]=paste(obs[obs$Transect_ID%in%SEGMENTS$Transect_ID[i]
                                                 & obs$DIST_ORIGIN>=SEGMENTS$SEG_LENGTH_START[i]
                                                 & obs$DIST_ORIGIN<SEGMENTS$SEG_LENGTH_END[i]
                                                 & !is.na(obs$SPP_NUMBER),"SPP_CODE"],collapse=",")
