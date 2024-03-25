@@ -46,7 +46,7 @@ source(paste0(usr,gitdir,"seabird_functions.R"))
 #### SEABIRD_CODES ####
 
 sp<-read.csv(paste0(usr,dir,"data/SeaLog-Species_CodeList.csv"))
-names(sp)<-c("Species_Name","Code","Sci_name","Animal","Unidentified_YN")
+names(sp)<-c("Species_Name","Code","Sci_name","Animal","Unidentified_YN","Size")
 head(sp)
 
 #### obs ####
@@ -80,6 +80,23 @@ obs[!is.na(obs$Count) & obs$Count ==9999,"Count"]<-NA
 obs$lat_bird<-obs$Latitude
 obs$lon_bird<-obs$Longitude
 
+
+# make DISTANCE column from Bin -------------------------------------------
+# 1=0-100m from the ship 
+# 2=100-200m " " " 
+# 3=200-300m " " "
+# 4=outside of this area
+
+names(obs)
+unique(obs$Bin)
+
+obs$DISTANCE<-obs$Bin
+obs$DISTANCE[obs$Bin=="0-100"]<-1
+obs$DISTANCE[obs$Bin=="100-200"]<-2
+obs$DISTANCE[obs$Bin=="200-300"]<-3
+obs$DISTANCE[obs$Bin=="outside of area"]<-4
+obs$DISTANCE<-as.numeric(obs$DISTANCE)
+unique(obs$DISTANCE)
 
 # Checks for LAT/LON = NAs ----------------------------------------------
 # IF missing locations are identified see Section 2. in Pacific Marine Bird Modeling_v0.9_Abbreviated_for_Tammy
@@ -309,8 +326,21 @@ remove(CRUISE_DAY)
 TRANSECTS=TRANSECTS[order(TRANSECTS$SEQ_ID),]
 
 #Calculate variable strip WIDTHS and AREAS based on Condition and bird size class (LG - shearwaters, boobies, etc. 
-#SM - phalaropes, storm-petrels, small auklets)
-TRANSECTS$WIDTH_LG=ifelse(TRANSECTS$Condition>=3,300,200)
+#SM - phalaropes, storm-petrels, small auklets, shorebirds)
+#1 	Conditions extremely bad
+#--Storm-Petrels, Phalaropes, and small auklets cannot reliably be detected to 100 m
+#--All individuals of all other species cannot reliably be detected to 200 m 
+#2 	Conditions poor
+#--All Storm-Petrels, Phalaropes, and small auklets visible to 100 m
+#--All individuals of all other species visible to 200 m 
+#3 	Conditions fair
+#--All Storm-Petrels, Phalaropes, and small auklets visible to 200 m 
+#--All individuals of all other species visible to 300 m
+#4 	Conditions good
+#--All individuals of all species visible out to 300 m
+#5 	Conditions excellent
+#--All individuals of all species visible out to 300 m +
+
 TRANSECTS$WIDTH_LG=ifelse(TRANSECTS$Condition>=3,300,200)
 TRANSECTS$WIDTH_SM=ifelse(TRANSECTS$Condition>=4,300,ifelse(TRANSECTS$Condition>=2,200,100))
 TRANSECTS$AREA_LG=TRANSECTS$WIDTH_LG*TRANSECTS$length
@@ -318,35 +348,34 @@ TRANSECTS$AREA_SM=TRANSECTS$WIDTH_SM*TRANSECTS$length
 
 #Compile text variable separated by commas of all SPP_CODE, SPP_NUMBER, and DISTANCE falling within each Transect_ID
 for(i in unique(TRANSECTS$Transect_ID))
-{ TRANSECTS[TRANSECTS$Transect_ID==i,
-            "Species"]=paste(obs[obs$Transect_ID==i
-                                               & !is.na(obs$SPP_NUMBER),"Species"],collapse=",")
+{TRANSECTS[TRANSECTS$Transect_ID==i,
+            "SPP_CODE_ALL"]=paste(obs[obs$Transect_ID==i
+                                               & !is.na(obs$Count),"Species"],collapse=",")
 TRANSECTS[TRANSECTS$Transect_ID==i,
-          "Count"]=paste(obs[obs$Transect_ID==i
-                                               & !is.na(obs$SPP_NUMBER),"Count"],collapse=",")
+          "SPP_NUMBER_ALL"]=paste(obs[obs$Transect_ID==i
+                                               & !is.na(obs$Count),"Count"],collapse=",")
 TRANSECTS[TRANSECTS$Transect_ID==i,
           "DISTANCE_ALL"]=paste(obs[obs$Transect_ID==i
-                                             & !is.na(obs$SPP_NUMBER),"DISTANCE"],collapse=",")}
-
+                                             & !is.na(obs$Count),"Bin"],collapse=",")}
 
 #Create a list object TRANSECTS_ALL composed of dataframes corresponding to each strip transect observation 
 #in a given TRANSECT with associated LAT,LONG, and distance information. This list can be efficiently queried using lapply.
 names(TRANSECTS)
 TRANSECTS_ALL=mapply(cbind, 
-                     Species=strsplit(TRANSECTS$Species,","),
-                     Count=strsplit(TRANSECTS$Count,","),
+                     SPP_CODE=strsplit(TRANSECTS$SPP_CODE_ALL,","),
+                     SPP_NUMBER=strsplit(TRANSECTS$SPP_NUMBER_ALL,","),
                      DISTANCE=strsplit(TRANSECTS$DISTANCE_ALL,","),
                      LONG_MID=TRANSECTS$lon_MID,
-                     lat_MID=TRANSECTS$lat_MID,
-                     Condition=TRANSECTS$Condition,
+                     LAT_MID=TRANSECTS$lat_MID,
+                     OBS_COND=TRANSECTS$Condition,
                      WIDTH_LG=TRANSECTS$WIDTH_LG,
                      WIDTH_SM=TRANSECTS$WIDTH_SM)
 
 TRANSECTS_ALL=lapply(TRANSECTS_ALL,function(x) as.data.frame(x,stringsAsFactors=F))
 
-SPP_CODES_LG_temp = SEABIRD_CODES[SEABIRD_CODES$AOU_CODE!="" & SEABIRD_CODES$Size == "Lg","SPP_CODE"][which(SEABIRD_CODES[SEABIRD_CODES$AOU_CODE!="" & SEABIRD_CODES$Size == "Lg","SPP_CODE"]%in%unique(obs[obs$DISTANCE<=3,"SPP_CODE"]))]
-SPP_CODES_SM_temp = SEABIRD_CODES[SEABIRD_CODES$AOU_CODE!="" & SEABIRD_CODES$Size == "Sm","SPP_CODE"][which(SEABIRD_CODES[SEABIRD_CODES$AOU_CODE!="" & SEABIRD_CODES$Size == "Sm","SPP_CODE"]%in%unique(obs[obs$DISTANCE<=3,"SPP_CODE"]))]
-SPP_CODES_AMBIG_temp = SEABIRD_CODES[SEABIRD_CODES$AOU_CODE=="","SPP_CODE"][which(SEABIRD_CODES[SEABIRD_CODES$AOU_CODE=="","SPP_CODE"]%in%unique(obs[obs$DISTANCE<=3,"SPP_CODE"]))]
+SPP_CODES_LG_temp = sp[sp$Code!="" & sp$Size == "Lg","Code"][which(sp[sp$Code!="" & sp$Size == "Lg","Code"]%in%unique(obs[obs$DISTANCE<=3,"Species"]))]
+SPP_CODES_SM_temp = sp[sp$Code!="" & sp$Size == "Sm","Code"][which(sp[sp$Code!="" & sp$Size == "Sm","Code"]%in%unique(obs[obs$DISTANCE<=3,"Species"]))]
+SPP_CODES_AMBIG_temp = sp[sp$Code=="","Code"][which(sp[sp$Code=="","Code"]%in%unique(obs[obs$DISTANCE<=3,"Species"]))]
 
 #Sum SPP_NUMBERs for different species within each Transect_ID
 for(i in SPP_CODES_LG_temp)
