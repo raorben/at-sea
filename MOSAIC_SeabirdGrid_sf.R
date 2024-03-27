@@ -3,8 +3,8 @@ library(ggplot2)
 library(dplyr)
 library(lubridate)
 library(units)
-library(terra)
-library(tmap)
+#library(terra)
+#library(tmap)
 
 if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
 gitdir<-"/git_repos/at-sea/";
@@ -185,7 +185,7 @@ for (i in 1:(nrow(sel))){
 head(obs)
 
 
-#observations that are not assigned to a Transet_ID
+#observations that are not assigned to a Transect_ID
 lost_obs<-obs%>%filter(is.na(Transect_ID)==TRUE)%>%filter(is.na(Species)==FALSE)
 
 # calculate inter point distances ------------------------------------------
@@ -199,7 +199,6 @@ obs.mp<-obs %>% filter(is.na(Transect_ID)==FALSE)%>%
   st_cast("POINT", keep=TRUE)
 str(obs.mp)
 
-dist<-obs.mp%>%st_distance(by_element = TRUE)
 dist<-st_distance(obs.mp$geometry,lead(obs.mp$geometry), by_element = T) 
 obs.mp$dist<-dist
 
@@ -209,6 +208,47 @@ obs.mp.dist.SUM<-obs.mp.dist%>%group_by(Cruise_ID,DayID,Transect_ID)%>%
   summarise(mDt=min(datetime),
             mxDt=max(datetime))
 #write.csv(obs.mp.dist.SUM,paste0(usr,dir,"Analysis/processed_data/DuplicateGPS_SUM_flagged.csv"))
+
+# Transect Distance vs. Sum interpoint: Find wavey Trans ------------------
+
+obs.mph<-obs.mp%>%group_by(Transect_ID)%>%
+  slice_head(n=1)
+
+obs.mpt<-obs.mp%>%group_by(Transect_ID)%>%
+  slice_tail(n=1)
+
+obs.mp_Sum<-obs.mp%>%group_by(Transect_ID)%>%
+  summarise(cumDist=sum(dist))
+
+distT<-st_distance(obs.mph$geometry,obs.mpt$geometry, by_element = T) 
+
+hist(distT)
+min(distT)
+
+
+obs.mp_Sum<-cbind(obs.mp_Sum, distT=distT)
+head(obs.mp_Sum)
+obs.mp_Sum$Wavy=obs.mp_Sum$cumDist/obs.mp_Sum$distT
+
+obs.mp_Sum$Wavy<-as.numeric(obs.mp_Sum$Wavy)
+obs.mp_SumW<-obs.mp_Sum%>%filter(Wavy>100)
+obs.mp_Sum
+
+#potentially troublesome transects
+unique(obs.mp_SumW$Transect_ID)
+
+#identified later in the code
+wonky<-c(2, 68, 70, 134, 319, 417, 445, 135, 288, 338, 346, 433, 463, 550, 557, 582, 583, 439,506, 507, 521)
+length(wonky)
+
+wonkyTrans<-obs.mp_Sum[obs.mp_Sum$Transect_ID %in% wonky,]
+wonkyTrans_obs<-obs[obs$Transect_ID %in% wonky,]
+
+ggplot()+
+  geom_point(data=wonkyTrans_obs,aes(x=lon,y=lat), size=.5)+
+  geom_path(data=wonkyTrans_obs,aes(x=lon,y=lat, color=as.factor(Transect_ID)))+
+  facet_wrap(~Transect_ID, scales="free")+
+  theme(legend.position = "none")
 
 # sf - transects to line segments -----------------------------------------
 length(unique(obs$Transect_ID))
@@ -229,7 +269,8 @@ obs_pt<-obs %>% filter(is.na(Transect_ID)==FALSE)%>%
   summarize() %>%
   filter(st_geometry_type(.) == "MULTIPOINT") 
 obs_ls<-obs_pt %>% 
-  st_cast("LINESTRING", keep=TRUE)
+  st_cast("LINESTRING", keep=TRUE)%>% 
+  st_cast("MULTILINESTRING", keep=TRUE) #for some reason this buffers better
 
 obs_ls %>% group_by(Transect_ID) %>% summarize(n=n())%>%
   filter(n>1)
@@ -316,7 +357,7 @@ small.3$Notes_Ex<-"Small bird observed during Condition 3 farther than 200m from
 obs$dist[obs$Condition==3 & is.na(obs$Species)==FALSE & obs$Size=="Sm" & obs$dist==3]<-4
 
 Obs_outside_Conditions<-rbind(toosmall.1, outside.1,small.2,outside.2,small.3)
-write.csv(Obs_outside_Conditions,paste0(usr,dir,"Analysis/processed_data/Obs_outside_Conditions_flagged.csv"))
+#write.csv(Obs_outside_Conditions,paste0(usr,dir,"Analysis/processed_data/Obs_outside_Conditions_flagged.csv"))
 
 
 # Buffer Transects --------------------------------------------------------
@@ -333,112 +374,130 @@ plot(obs_ls%>%filter(ObsSidePS=="Starboard"))
 ls<-st_linestring(rbind(c(0,0), c(10,0)))
 plot(st_buffer(st_linestring(rbind(c(0,0), c(10,0))), -2, singleSide=T), axes=T)
 
-sf_use_s2(TRUE)
+
+obs_ls_planer<-obs_ls%>%st_transform("EPSG:32610") #Zone 10= most of study area
+
+#sf_use_s2(TRUE)
 sf_use_s2(FALSE)
-obs_ls_planer<-obs_ls%>%st_transform("EPSG:32609") #Zone 10= most of study area
 
 obs_ls_P1<-obs_ls_planer%>%
   filter(Condition==1)
-obs_ls_P1.b <- st_buffer(obs_ls_P1, dist = 100, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P1.b_p <- st_buffer(obs_ls_P1, dist = 100, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P1.b_n <- st_buffer(obs_ls_P1, dist = -100, endCapStyle = "FLAT",singleSide = TRUE)
 #st_distance(obs_ls_P1%>%filter(Transect_ID==192)) #double check units are m
+
+tm_shape(obs_ls_P1.b_p) + tm_borders() + tm_facets(by = "Transect_ID")
+tm_shape(obs_ls_P1.b_n) + tm_borders() + tm_facets(by = "Transect_ID")
 
 obs_ls_P2<-obs_ls_planer%>%
   filter(Condition==2)
-obs_ls_P2.b <- st_buffer(obs_ls_P2, dist = 200, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P2.b_p <- st_buffer(obs_ls_P2, dist = 200, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P2.b_n <- st_buffer(obs_ls_P2, dist = -200, endCapStyle = "FLAT",singleSide = TRUE)
+
+tm_shape(obs_ls_P2.b_p) + tm_borders() + tm_facets(by = "Transect_ID")
+tm_shape(obs_ls_P2.b_n) + tm_borders() + tm_facets(by = "Transect_ID")
+# 439,506, 507, 521
 
 obs_ls_P3<-obs_ls_planer%>%
   filter(Condition==3)
-obs_ls_P3.b300 <- st_buffer(obs_ls_P3, dist = 300, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P3.b300_p <- st_buffer(obs_ls_P3, dist = 300, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P3.b300_n <- st_buffer(obs_ls_P3, dist = -300, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P3.b200_p <- st_buffer(obs_ls_P3, dist = 200, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P3.b200_n <- st_buffer(obs_ls_P3, dist = -200, endCapStyle = "FLAT",singleSide = TRUE)
 
-obs_ls_P3<-obs_ls_planer%>%
-  filter(Condition==3)
-obs_ls_P3.b200 <- st_buffer(obs_ls_P3, dist = 200, endCapStyle = "FLAT",singleSide = TRUE)
+tm_shape(obs_ls_P3.b300_p) + tm_borders() + tm_facets(by = "Transect_ID")
+tm_shape(obs_ls_P3.b300_n) + tm_borders() + tm_facets(by = "Transect_ID")
+tm_shape(obs_ls_P3.b200_p) + tm_borders() + tm_facets(by = "Transect_ID")
+tm_shape(obs_ls_P3.b200_n) + tm_borders() + tm_facets(by = "Transect_ID")
+
+#2, 68, 70, 134, 319, 417, 445
 
 obs_ls_P4<-obs_ls_planer%>%
   filter(Condition==4)
-obs_ls_P4.b <- st_buffer(obs_ls_P4, dist = 300, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P4.b_p <- st_buffer(obs_ls_P4, dist = 300, endCapStyle = "FLAT",singleSide = TRUE)
+obs_ls_P4.b_n <- st_buffer(obs_ls_P4, dist = -300, endCapStyle = "FLAT",singleSide = TRUE)
 
+tm_shape(obs_ls_P4.b_p) + tm_borders() + tm_facets(by = "Transect_ID")
+tm_shape(obs_ls_P4.b_n) + tm_borders() + tm_facets(by = "Transect_ID")
+#135, 288, 338, 346, 433, 463, 550, 557, 582, 583
 
-##terra implimentation looks the same
-vsp <- terra::vect(obs_ls_P3)
-buffer_terra <- terra::buffer(vsp, width = 300, capstyle = "FLAT", singlesided = TRUE)
-buffer_terra.sf <- sf::st_as_sf(buffer_terra)
-
-#plot to check
-#ggplot() +
-#  geom_sf(data = obs_ls_P1.b%>%filter(Transect_ID==192), fill = "yellow", color = "gray")+
-#  geom_sf(data = obs_ls_P1%>%filter(Transect_ID==192), color = "blue", linewidth = 1)+
-#  geom_sf(data = obs_ls_P1.b%>%filter(Transect_ID==192)%>%st_cast("POINT"), color = "orange")
-
-tm_shape(obs_ls_P1.b) +
-  tm_borders() +
-  tm_facets(by = "Transect_ID")
-
-library(tmap)
-tm_shape(obs_ls_P2.b) +
-  tm_borders() +
-  tm_facets(by = "Transect_ID")
-
-unique(obs_ls_P2.b$Transect_ID)
-ggplot() +
-  geom_sf(data = obs_ls_P2.b%>%filter(Transect_ID=="507"), fill = "yellow", color = "gray")+
-  geom_sf(data = obs_ls_P2%>%filter(Transect_ID=="507"), color = "blue", linewidth = 1)+
-  geom_sf(data = obs_ls_P2.b%>%filter(Transect_ID=="507")%>%st_cast("POINT"), color = "orange")+
-  geom_sf(data = obs_pt%>%filter(Transect_ID=="507")%>%st_transform("EPSG:32609"), color = "pink")
-  
-
-ggplot() +
-  geom_sf(data = obs_ls_P2.b%>%filter(Transect_ID=="521"), fill = "yellow", color = "gray")+
-  geom_sf(data = obs_ls_P2%>%filter(Transect_ID=="521"), color = "blue", linewidth = 1)+
-  geom_sf(data = obs_ls_P2.b%>%filter(Transect_ID=="521")%>%st_cast("POINT"), color = "orange")+
-  geom_sf(data = obs_pt%>%filter(Transect_ID=="521")%>%st_transform("EPSG:32609"), color = "pink")
-
-tm_shape(obs_ls_P3.b300) +
-  tm_borders() +
-  tm_facets(by = "Transect_ID")
-
-tm_shape(obs_ls_P3.b200) +
-  tm_borders() +
-  tm_facets(by = "Transect_ID")
-
-tm_shape(obs_ls_P4.b) +
-  tm_borders() +
-  tm_facets(by = "Transect_ID",)
-
-
-ggplot() +
-  geom_sf(data = buffer_terra.sf%>%filter(Transect_ID=="70"), fill = "yellow", color = "gray")+
-  geom_sf(data = obs_ls_P3%>%filter(Transect_ID=="70")%>%st_cast("POINT"), color = "blue", linewidth = 1)
-
-A<-obs_ls_P3%>%filter(Transect_ID=="70")%>%st_cast("POINT")
-B<-obs%>%filter(Transect_ID=="70")
-ggplot()+
-  geom_point(data=obs%>%filter(Transect_ID=="70"),aes(x=lon,y=lat,color=datetime))
-
-
+wonky<-c(2, 68, 70, 134, 319, 417, 445, 135, 288, 338, 346, 433, 463, 550, 557, 582, 583, 439,506, 507, 521)
+length(wonky)
 
 # perpendicular points ----------------------------------------------------
-
-#calculate HEADING from each OBSERVATION to the starting coordinates of transect (LONG_1,LAT_1)
-obs[!is.na(obs$lon_1) 
-    & !is.na(obs$Longitude),"HEADING_ORIGIN"] <- geosphere::bearingRhumb(obs[!is.na(obs$lon_1) 
-                                                                             & !is.na(obs$Longitude),c("lon_1","lat_1")],
-first_obs<-obs%>%group_by(Transect_ID)%>%
-  slice_min(datetime)
-
-obs$Head<-NA
+obs$Head<-NA 
 for (i in 1:nrow(obs)){
   tID<-obs$Transect_ID[i]
   if(is.na(tID)==TRUE) next
-  obs$Head[i]<-geosphere::bearingRhumb(obs[!is.na(obs$lon_1) & !is.na(obs$Longitude),c("lon_1","lat_1")],
-  
+  if(i==86833) next
+  obs$Head[i]<-geosphere::bearingRhumb(c(obs$lon[i],obs$lat[i]),c(obs$lon[i+1],obs$lat[i+1])) 
 } 
-                                                                                                                                                 obs[!is.na(obs$lon_1) 
-                                                                             
+  
+mHead<-obs%>%group_by(Transect_ID)%>%
+  summarise(uHead=mean(Head, na.rm=TRUE))
+
+obs<-left_join(obs,mHead, by="Transect_ID")
+
+obs$mHead
+library(MetBrewer)
+ggplot()+
+  geom_path(data=obs%>%filter(is.na(Transect_ID)==FALSE), 
+            aes(x=lon,y=lat, group=Transect_ID, color=uHead.x), linewidth=.02)+
+  geom_path(data=obs%>%filter(is.na(Transect_ID)==FALSE)%>%filter(uHead.x>180), 
+           aes(x=lon,y=lat, group=Transect_ID, color=uHead.x), linewidth=2)+
+  #geom_path(data=obs%>%filter(is.na(Transect_ID)==FALSE), 
+  #          aes(x=lon,y=lat, group=Transect_ID, color=datetime), linewidth=.5)+
+  scale_color_met_c("Peru1")+
+  facet_wrap(~Cruise_ID)
+ 
+ggplot()+
+  geom_path(data=obs%>%filter(is.na(Transect_ID)==FALSE), 
+            aes(x=lon,y=lat, group=Transect_ID, color=uHead.x), linewidth=.02)+
+  geom_path(data=obs%>%filter(is.na(Transect_ID)==FALSE)%>%filter(uHead.x<180), 
+            aes(x=lon,y=lat, group=Transect_ID, color=uHead.x), linewidth=2)+
+  #geom_path(data=obs%>%filter(is.na(Transect_ID)==FALSE), 
+  #          aes(x=lon,y=lat, group=Transect_ID, color=datetime), linewidth=.5)+
+  scale_color_met_c("Peru1")+
+  facet_wrap(~Cruise_ID)
+
+
+#https://www.mathworks.com/matlabcentral/answers/484422-how-to-find-the-coordinates-of-a-point-perpendicular-to-a-line-knowing-the-distance                                                                             
+#https://stackoverflow.com/questions/60939747/how-to-find-the-distance-of-a-point-to-a-line-knowing-all-the-points
+
 # calculate the perpendicular distance (DIST_PERP) of each OBSERVATION from the TRANSECT line,
 # where DIST_ORIGIN represents the hypotenuse and HEADING_DIFF 
 # represents the interior angle (THETA) in a right triangle
 obs$DIST_PERP <- obs$DIST_ORIGIN * abs(sin(obs$HEADING_DIFF * pi/180))
 
 
+
+
+
+
+
+# worked example for stack exchange ---------------------------------------
+
+obs_ls_125<-obs_ls_planer%>%filter(Transect_ID==125)
+obs_ls_125
+saveRDS(obs_ls_125,paste0(usr,dir,"obs_ls_125.rda"))
+obs_ls_125<-readRDS(paste0(usr,dir,"obs_ls_125.rda"))
+
+obs_ls_125.b <- st_buffer(obs_ls_125, dist = 100, endCapStyle = "FLAT",singleSide = TRUE)
+
+#vsp <- terra::vect(obs_ls_125)
+#buffer_terra <- terra::buffer(vsp, width = 100, capstyle = "FLAT", singlesided = TRUE)
+#buffer_terra.sf <- sf::st_as_sf(buffer_terra)
+
+ggplot() +
+  geom_sf(data = obs_ls_125.b, fill = "yellow")+
+  geom_sf(data = obs_ls_125, color = "blue", linewidth = 1)+
+  geom_sf(data = obs_ls_125.b%>%st_cast("POINT"), color = "orange")
+
+ggplot()+
+  geom_path(data=obs%>%filter(Transect_ID==125),aes(lat,lon))+
+  geom_point(data=obs%>%filter(Transect_ID==125),aes(lat,lon, color=datetime))
+
+ggplot() +
+  geom_sf(data = buffer_terra.sf, fill = "pink")+
+  geom_sf(data = buffer_terra.sf%>%st_cast("POINT"), color = "orange")
 
