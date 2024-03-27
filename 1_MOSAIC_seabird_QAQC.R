@@ -189,6 +189,8 @@ unique(survey_dat$Vessel)
 survey_dat%>%filter(is.na(Vessel)==TRUE) #checks for vessel not entered
 survey_dat%>%filter(is.na(DayID)==TRUE) #checks DayID not entered 
 
+unique(survey_dat$DayID) #some errors to fix here
+
 # pulls out comments from new cruise and makes list for manual review---------------------------------------
 comments<-survey_dat%>%filter(Cruise_ID==C_ID)%>%
   filter(is.na(Comments)==FALSE)
