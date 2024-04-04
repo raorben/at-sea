@@ -234,6 +234,8 @@ obs.mp_Sum$Wavy<-as.numeric(obs.mp_Sum$Wavy)
 obs.mp_SumW<-obs.mp_Sum%>%filter(Wavy>100)
 obs.mp_Sum
 
+obs.mp_SumShort<-obs.mp_Sum%>%filter(as.numeric(cumDist) <5000)
+
 #potentially troublesome transects
 unique(obs.mp_SumW$Transect_ID)
 
@@ -469,10 +471,27 @@ ggplot()+
 # represents the interior angle (THETA) in a right triangle
 obs$DIST_PERP <- obs$DIST_ORIGIN * abs(sin(obs$HEADING_DIFF * pi/180))
 
+obs$lat[27]
+# Enter coordinates of points A and B and  
+# the 1/2 length of the perpendicular segment
+A = c(obs$lon[26], obs$lat[26]) #[x,y]
+B = c(obs$lon[28], obs$lat[28]); #[x,y]
+Clen = 300;  #length of line CD (1/2 of the full perpendicular line)
+## Do the math
+# Get slope and y int of line AB
+slope = (B[2]-A[2]) / (B[1]-A[1]); 
+yint = B[2] - slope*B[1]; 
 
-
-
-
+# Choose a point C along line AB at half distance
+C(1) = range([B(1),A(1)])/2+min([A(1),B(1)]); 
+C(2) = slope * C*(1) + yint; 
+C = c(obs$lon[27], obs$lat[27])
+# Get slope and y int of line perpendicular to AB at point C
+perpSlope = -1/slope; 
+perpYint = C[2] - perpSlope*C[1]; 
+# Find the end points of the perpendicular line with length Clen*2
+x = C[1] + (Clen*sqrt(1/(1+perpSlope^2)))
+y = C[2] + (perpSlope*Clen*sqrt(1/(1+perpSlope^2))) 
 
 
 # worked example for stack exchange ---------------------------------------
