@@ -4,7 +4,7 @@ library(dplyr)
 library(lubridate)
 library(units)
 #library(terra)
-#library(tmap)
+library(tmap)
 
 if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
 gitdir<-"/git_repos/at-sea/";
@@ -124,7 +124,7 @@ obs<-obs %>%
 names(obs)
 #NOT: "Beaufort", "Weather", "Type"
 #removed meaningless flags
-obs<-obs%>%dplyr::select(-flag_Type,-flag_Beaufort,-flag_Obs,-flag_Weather)
+obs<-obs%>%dplyr::select(-flag_Type,-flag_Beaufort,-flag_Weather)
 
 #removed off Tx locations
 obs<-obs%>%filter(On.OffTx=="ON") 
