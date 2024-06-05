@@ -363,8 +363,6 @@ seg_df <- plyr::ddply(obs, ~Cruise_ID, .fun = function(day){
 # add a unique identifier per segment
 seg_df$code_seg <- paste(seg_df$leg_ID, seg_df$seg, sep = "_")
 
-# save
-saveRDS(seg_df, file = paste0(usr,dir,"Analysis/Segmentation/All_Obs_5kmSegs_df.rds"))
 
 seg_sf <- seg_df %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
@@ -386,7 +384,45 @@ seg_sf <- seg_df %>%
   dplyr::summarise(do_union = F) %>%
   st_cast(to = 'LINESTRING')
 seg_sf$dist_km <- as.numeric(st_length(seg_sf)/1000)
+seg_df<-left_join(seg_df,seg_sf%>%select(code_seg,dist_km), by="code_seg")
 
+
+# Condition and Bird Size -------------------------------------------------
+#1 	Conditions extremely bad
+#--Storm-Petrels, Phalaropes, and small auklets cannot reliably be detected to 100 m
+#--All individuals of all other species cannot reliably be detected to 200 m 
+#2 	Conditions poor
+#--All Storm-Petrels, Phalaropes, and small auklets visible to 100 m
+#--All individuals of all other species visible to 200 m 
+#3 	Conditions fair
+#--All Storm-Petrels, Phalaropes, and small auklets visible to 200 m 
+#--All individuals of all other species visible to 300 m
+#4 	Conditions good
+#--All individuals of all species visible out to 300 m
+#5 	Conditions excellent
+#--All individuals of all species visible out to 300 m +
+
+seg_df$width_obs<-NA
+for (i in 1:nrow(seg_df)){
+  if(is.na(seg_df$Size[i])==TRUE) {next}
+  if(seg_df$Size[i]=="Lg"){
+    seg_df$width_obs[i][seg_df$Condition[i]==1 | seg_df$Condition[i]==2]<-200;
+    seg_df$width_obs[i][seg_df$Condition[i]==3 | seg_df$Condition[i]==4]<-300
+  }
+  
+  if(seg_df$Size[i]=="Sm"){
+    seg_df$width_obs[i][seg_df$Condition[i]==2]<-100;
+    seg_df$width_obs[i][seg_df$Condition[i]==3]<-200;
+    seg_df$width_obs[i][seg_df$Condition[i]==4]<-300
+  }
+}
+
+#to check logic
+seg_df%>%filter(is.na(Size)==FALSE)%>%filter(Condition!=4)%>%
+  select(Species, Size, Condition, width_obs)
+
+# save
+saveRDS(seg_df, file = paste0(usr,dir,"Analysis/Segmentation/All_Obs_5kmSegs_df.rds"))
 saveRDS(seg_sf, file = paste0(usr,dir,"Analysis/Segmentation/All_Obs_5kmSegs_sf.rds"))
 seg_sf<-readRDS(file = paste0(usr,dir,"Analysis/Segmentation/All_Obs_5kmSegs_sf.rds"))
 
@@ -397,7 +433,7 @@ print(var(seg_sf$dist_km))
 hist(seg_sf$dist_km, main = "Distribution of segment lengths", xlab = "distance (km)")
 
 
-seg_sf_cut<-seg_sf%>%filter(dist_km>1.5)
+seg_sf_cut<-seg_df%>%filter(dist_km>1.5)
 #calculate survey effort dropped by cruise relative to cutoff selected above
 seg_sf_cut%>%group_by(Cruise_ID)%>%
   summarise(LengthDropped=sum(dist_km))
@@ -405,3 +441,6 @@ print("Variance and distribution of segment lengths based on 5 km")
 print(summary(seg_sf_cut$dist_km))
 print(var(seg_sf_cut$dist_km))
 hist(seg_sf_cut$dist_km, main = "Distribution of segment lengths", xlab = "distance (km)")
+
+
+seg_df%>%filter(dist_km>1.5)%>%filter()
