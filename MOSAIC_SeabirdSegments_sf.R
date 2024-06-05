@@ -1,13 +1,14 @@
 library(sf)
 library(ggplot2)
 library(lubridate)
-library(units)
-library(tmap)
+#library(units)
+#library(tmap)
 library(trajr) #turning angles
 library(tidyr) #replace_na
 #library(plyr) # used but specified with ::
 library(dplyr)
 library(gridExtra)
+library(trakR) #for makeTrip (for finding turning angle bouts >10)
 
 if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
 gitdir<-"/git_repos/at-sea/";
@@ -62,7 +63,6 @@ obs[!is.na(obs$Count) & obs$Count ==9999,"Count"]<-NA
 # 3=200-300m " " "
 # 4=outside of this area
 
-names(obs)
 unique(obs$Bin)
 
 obs$dist<-obs$Bin
@@ -72,9 +72,6 @@ obs$dist[obs$Bin=="200-300"]<-3
 obs$dist[obs$Bin=="outside of area"]<-4
 obs$dist<-as.numeric(obs$dist)
 unique(obs$dist)
-
-outside<-obs%>%filter(dist==4)
-
 
 # Adjust Condition to only flag true changes (4=5) ------------------------------
 unique(obs$Condition) #"5" "4" "3" "1" "2" NA 
@@ -103,10 +100,11 @@ unique(obs$Condition)
 # Condition Check --------------------------------------------------------
 # Identify Observations Outside of the Area 
 
-obs%>%filter(is.na(Species)==FALSE)%>% #should be nothing
-  filter(is.na(Condition)==TRUE)
+(toFix<-obs%>%filter(is.na(Species)==FALSE)%>% #should be nothing
+  filter(is.na(Condition)==TRUE))
+write.csv(toFix,paste0(usr,dir,"Analysis/Segmentation/RecordstoFix_noCondition.csv"))
 
-outside<-obs%>%filter(dist==4)
+outside<-obs%>%filter(dist==4) #finds observations outside strips
 outside$Notes_Ex<-"Recorded outside of 300m in field"
 
 #what do we do about observations that are outside the area - this code gives them dist==4
@@ -145,61 +143,74 @@ small.3$Notes_Ex<-"Small bird observed during Condition 3 farther than 200m from
 obs$dist[obs$Condition==3 & is.na(obs$Species)==FALSE & obs$Size=="Sm" & obs$dist==3]<-4
 
 Obs_outside_Conditions<-rbind(outside, toosmall.1, outside.1,small.2,outside.2,small.3)
-write.csv(Obs_outside_Conditions,paste0(usr,dir,"Analysis/processed_data/Obs_outside_Conditions_flagged.csv"))
+write.csv(Obs_outside_Conditions,paste0(usr,dir,"Analysis/Segmentation/Obs_outside_Conditions_flagged.csv"))
 
+print(Obs_outside_Conditions%>%group_by(Species_Name)%>%filter(Animal=="bird")%>%
+  summarise(n=sum(Count, na.rm=TRUE)), n=57)
 
 # Flags: Condition, On/Off, ObsSide -------------------------------------------------------------------
 #amazing code that creates a "flag" column for changes: 
 #"Condition", "On.OffTx", "ObsSidePS"
-names(obs)
+
 obs<-obs %>% ungroup()%>%
   mutate(across(Condition:ObsSidePS, ~ +(lag(.x, default = first(.x)) != .x), .names = "flag_{col}"))
+
 #run twice to get Date (some typos in DayID)
 obs<-obs %>% 
   mutate(across(date, ~ +(lag(.x, default = first(.x)) != .x), .names = "flag_{col}"))
 obs<-obs %>% 
   mutate(across(Cruise_ID, ~ +(lag(.x, default = first(.x)) != .x), .names = "flag_{col}"))
 
-names(obs)
 #NOT: "Beaufort", "Weather", "Type"
 #removed meaningless flags since it is easier than adjusting code above
 obs<-obs%>%dplyr::select(-flag_Type,-flag_Beaufort,-flag_Weather)
 
-
-# Flag Turning Angle: calculate turning angles and makes a flag for angles greater than 10 (3 consecuative pts)----------------
-head(obs)
-obs<-obs%>%filter(is.na(lon)==FALSE)
+# Flag Turning Angle: calculate turning angles and makes a flag for angles greater than 10 (3 consecutive pts)----------------
+obs<-obs%>%filter(is.na(lon)==FALSE) #shouldn't filter anything out, but code retained to double check
   obs%>%filter(is.na(lat))
   obs%>%filter(is.na(datetime))
 
 coords <- data.frame(x=obs$lon,y=obs$lat, times=obs$datetime)
 trj <- TrajFromCoords(coords)
 plot(trj)
-turnA<-TrajAngles(trj, lag = 1, compass.direction = NULL)
+
+#Calculates the step angles (in radians) of each segment, relative to the previous segment 
+turnA<-trajr::TrajAngles(trj, lag = 1, compass.direction = NULL)
 
 obs$turnA<-c(NA,turnA*180/pi,NA) #convert radians to degrees
-obs$turnA<-abs(round(obs$turnA,4)) #absolute value & round to 4 digits
+obs$turnA<-abs(round(obs$turnA,2)) #absolute value & round to 2 digits
 
 obs%>%filter(abs(turnA)>10)%>%
   summarise(n=n())
+
+#finds bouts of turning angles >10 degrees and sequentially numbers them. 
+#TripNum=0 is for turning angles <10
+obs<-MakeTrip(
+  obs,
+  ID = "Cruise_ID",
+  DistCutOff = 10,
+  Dist2Colony = "turnA",
+  NumLocCut = 1
+)
+
+obs$TripNum[obs$TripNum==0]<-NA
+obs$CruiseTN<-paste0(obs$Cruise_ID,"_",obs$TripNum)
+obs<-obs %>% 
+  group_by(CruiseTN) %>% 
+  mutate(flag_Turns = ifelse(turnA == max(turnA), 1,0))
+obs$flag_Turns[is.na(obs$TripNum)==TRUE]<-0
+
+obs %>% group_by(CruiseTN) %>% slice(which.max(turnA))%>%select(turnA,flag_Turns)
 
 head(obs)
 ggplot()+
   geom_path(data=obs, 
             aes(x=lon, y=lat, group=DayID, color=DayID))+
-  geom_point(data=obs%>%filter(turnA>20), 
+  geom_point(data=obs%>%filter(flag_Turns==1), 
              aes(x=lon, y=lat))+
   theme(legend.position = "none")+
   NULL+
   facet_wrap(~Cruise_ID, nrow=2)
-
-turn_obs<-obs%>%filter(turnA>10)%>%filter(is.na(Species)==FALSE)
-tObs_sum<-turn_obs%>%group_by(Species_Name)%>%
-  summarise(n=n(),
-            count=sum(Count))
-
-obs$flag_Turns<-0
-obs$flag_Turns[obs$turnA>10]<-1
 
 
 # Flag GPS break: removed off effort -& flags breaks in GPS crumbs greater than 4min  --------
@@ -255,27 +266,23 @@ obs_short<-obs_short%>%filter(is.na(Species)==FALSE)
               nflag_On.OffTx=sum(flag_On.OffTx),
               flag_ObsSidePS=sum(flag_ObsSidePS),
               flag_GPScrumb_break=sum(flag_GPScrumb_break)))
-write.csv(obs_short,paste0(usr,dir,"Analysis/processed_data/ShortSegments_flagged.csv"))
-write.csv(obs_short_sum,paste0(usr,dir,"Analysis/processed_data/ShortSegmentsSUM_flagged.csv"))
+write.csv(obs_short,paste0(usr,dir,"Analysis/Segmentation/ShortSegments_Obsflagged&removed.csv"))
+write.csv(obs_short_sum,paste0(usr,dir,"Analysis/Segmentation//ShortSegmentsSUM_flagged.csv"))
+
+print(obs_short%>%group_by(Species_Name)%>%filter(Animal=="bird")%>%
+        summarise(n=sum(Count, na.rm=TRUE)), n=16)
 
 
 # Number  legs -------------------------------------------------------
 sel<-sel%>%filter(length!=0) #remove legs with only one point within a set of conditions
-sel<-sel%>%filter(dur>5) #removes legs with a duration of <5min
+#sel<-sel%>%filter(dur>5) #removes legs with a duration of <5min
 
 obs$leg_ID<-NA
 for (i in 1:(nrow(sel))){
   obs$leg_ID[sel$s.sel[i]:sel$e.sel[i]]<-i
 }
 
-head(obs)
 
-
-#On-effort observations that are not assigned to a leg_ID
-lost_obs<-obs%>%filter(is.na(leg_ID)==TRUE)%>%filter(is.na(Species)==FALSE)
-write.csv(lost_obs,paste0(usr,dir,"Analysis/processed_data/lost_obs_flagged.csv"))
-
-names(obs)
 # Map spatial lines legs
 # convert to spatial lines
 leg_sf <- obs %>% filter(is.na(leg_ID)==FALSE) %>%
@@ -296,7 +303,8 @@ plyr::d_ply(leg_sf%>%filter(is.na(leg_ID)==FALSE), ~Cruise_ID, function(d){
     geom_sf(aes(col = as.factor(leg_ID), group=leg_ID, geometry = geometry)) +
     scale_colour_discrete(name = "#Leg") +
     theme_classic()
-  ggsave(g, file = paste0(usr,dir,"Analysis/Leg_Plots/All_transects_leg_", d$Cruise_ID[1], ".png", sep=""), dpi = 300, width = 10, height = 8)
+  ggsave(g, file = paste0(usr,dir,"Analysis/Segmentation/Leg_Plots/All_transects_leg_", d$Cruise_ID[1], ".png", sep=""), 
+         dpi = 300, width = 10, height = 8)
   grid.arrange(g)
 })
 
@@ -305,7 +313,7 @@ ref = 5
 obs$day<-as.character(obs$date)
 
 #d<-obs%>%filter(leg_ID==1) #for de-bugs
-obs<-obs%>%filter(is.na(leg_ID)==FALSE)
+obs<-obs%>%filter(is.na(leg_ID)==FALSE) #removes legs w/ length 1
 
 seg_df <- plyr::ddply(obs, ~Cruise_ID, .fun = function(day){
   county <- 1
@@ -356,7 +364,7 @@ seg_df <- plyr::ddply(obs, ~Cruise_ID, .fun = function(day){
 seg_df$code_seg <- paste(seg_df$leg_ID, seg_df$seg, sep = "_")
 
 # save
-#save(seg_df, file = "./Outputs/All/seg_df.RData")
+saveRDS(seg_df, file = paste0(usr,dir,"Analysis/Segmentation/All_Obs_5kmSegs_df.rds"))
 
 seg_sf <- seg_df %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
@@ -379,7 +387,8 @@ seg_sf <- seg_df %>%
   st_cast(to = 'LINESTRING')
 seg_sf$dist_km <- as.numeric(st_length(seg_sf)/1000)
 
-save(seg_sf, file = "./Outputs/All/seg_sf.RData")
+saveRDS(seg_sf, file = paste0(usr,dir,"Analysis/Segmentation/All_Obs_5kmSegs_sf.rds"))
+seg_sf<-readRDS(file = paste0(usr,dir,"Analysis/Segmentation/All_Obs_5kmSegs_sf.rds"))
 
 # summarise segment mean, min, max and variance of lengths
 print("Variance and distribution of segment lengths based on 5 km")
@@ -387,4 +396,12 @@ print(summary(seg_sf$dist_km))
 print(var(seg_sf$dist_km))
 hist(seg_sf$dist_km, main = "Distribution of segment lengths", xlab = "distance (km)")
 
-long_seg_sf<-seg_sf%>%filter(dist_km>8)
+
+seg_sf_cut<-seg_sf%>%filter(dist_km>1.5)
+#calculate survey effort dropped by cruise relative to cutoff selected above
+seg_sf_cut%>%group_by(Cruise_ID)%>%
+  summarise(LengthDropped=sum(dist_km))
+print("Variance and distribution of segment lengths based on 5 km")
+print(summary(seg_sf_cut$dist_km))
+print(var(seg_sf_cut$dist_km))
+hist(seg_sf_cut$dist_km, main = "Distribution of segment lengths", xlab = "distance (km)")
