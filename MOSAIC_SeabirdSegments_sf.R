@@ -2,23 +2,20 @@ library(sf)
 library(ggplot2)
 library(lubridate)
 library(units)
-#library(terra)
 library(tmap)
-#library(trakR)
 library(trajr) #turning angles
 library(tidyr) #replace_na
-#library(plyr)
+#library(plyr) # used but specified with ::
 library(dplyr)
 library(gridExtra)
 
 if(Sys.info()[7]=="rachaelorben") {usr<-"/Users/rachaelorben";
 gitdir<-"/git_repos/at-sea/";
 
-dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
-
+if(Sys.info()[7]=="rachaelorben") dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
 if(Sys.info()[7]=="kennerlw") dir<-"/Volumes/GoogleDrive/My Drive/Seabird_Oceanography_Lab/At-SeaSurveys/HALO/Raw Dat"
 
-source(paste0(usr,gitdir,"seabird_functions.R"))
+#source(paste0(usr,gitdir,"seabird_functions.R"))
 
 #### bring in data ####
 
@@ -340,10 +337,20 @@ seg_df <- plyr::ddply(obs, ~Cruise_ID, .fun = function(day){
         county <<- county + 1
       }
       return(d)
+      # doesn't work, meant to find longer segment and potentially resplit
+      # seg_sf <- d %>% 
+      #   st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+      #   group_by(Cruise_ID, seg) %>%
+      #   dplyr::summarise(do_union = F) %>%
+      #   st_cast(to = 'LINESTRING')
+      # # length in kilometers
+      # seg_sf$dist_km <- as.numeric(st_length(seg_sf)/1000)
+      # if(length(unique(seg_sf$dist_km>8))==2){return(d); break}
     }
   })
   return(dday)
 })
+
 
 # add a unique identifier per segment
 seg_df$code_seg <- paste(seg_df$leg_ID, seg_df$seg, sep = "_")
@@ -357,12 +364,12 @@ seg_sf <- seg_df %>%
   dplyr::summarise(do_union = F) %>%
   st_cast(to = 'LINESTRING')
 
-d_ply(seg_sf, ~Cruise_ID, function(d){
+plyr::d_ply(seg_sf, ~Cruise_ID, function(d){
   g <- ggplot(d) +
     geom_sf(aes(geometry = geometry, color = as.character(seg))) +
     scale_colour_discrete(name = "#Segment", guide = "none") +
     theme_classic()
-  ggsave(g, file = paste("./Outputs/All/All_transects_seg_5km_", d$Cruise_ID[1], ".png", sep=""), dpi = 300, width = 6, height = 8)
+  ggsave(g, file = paste0(usr,dir,"Analysis/Leg_Plots/All_transects_seg_5km_", d$Cruise_ID[1], ".png", sep=""), dpi = 300, width = 6, height = 8)
 })
 
 seg_sf <- seg_df %>%
@@ -379,3 +386,5 @@ print("Variance and distribution of segment lengths based on 5 km")
 print(summary(seg_sf$dist_km))
 print(var(seg_sf$dist_km))
 hist(seg_sf$dist_km, main = "Distribution of segment lengths", xlab = "distance (km)")
+
+long_seg_sf<-seg_sf%>%filter(dist_km>8)
