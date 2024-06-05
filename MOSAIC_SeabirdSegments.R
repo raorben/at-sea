@@ -436,10 +436,10 @@ for(i in unique(SEGMENTS$Transect_ID)){
   # add this segment to the prior or the subsequent segment
   # (short segments will then be removed outside this loop)
   if(any(SEGMENTS[SEGMENTS$Transect_ID==i,"length"]>5000
-         & SEGMENTS[SEGMENTS$Transect_ID==i,"SEG_LENGTH"]<2000)){
+         & SEGMENTS[SEGMENTS$Transect_ID==i,"SEG_LENGTH"]<2500)){
     
     # identify index numbers of short segments
-    SLIVER_INDEX_temp = which(SEGMENTS$Transect_ID==i & SEGMENTS$SEG_LENGTH<2000)
+    SLIVER_INDEX_temp = which(SEGMENTS$Transect_ID==i & SEGMENTS$SEG_LENGTH<2500)
     
     # if sliver is the first segment in Transect_ID==i add sliver SEG_LENGTH to the subsequent segment SEG_LENGTH
     if(SEGMENTS[SLIVER_INDEX_temp,"SEG_ID"]==1){

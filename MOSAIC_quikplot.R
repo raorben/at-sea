@@ -551,3 +551,97 @@ ggplot()+
   theme(axis.text.x = element_text(angle = -60, hjust=-.1))+facet_wrap(~Species, nrow=1)
 ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_BFAL_NOFU_Cruise_HAKE_noUNI.jpeg"))
 
+
+# Phalaropes & Wind for ARF Proposal--------------------------------------------------------------------
+quartz(height=7,width=8)
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
+  geom_path(data=survey_dat_ON,aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=survey_dat_ON%>%filter(Species!="null")%>%
+               filter(Animal=="bird")%>%filter(Species=="RNPH" | Species=="REPH" | Species=="UNPH"),
+             aes(x=Longitude,y=Latitude, color=Species, size=Count))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,46.2))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  facet_wrap(~Cruise_ID, nrow=2)
+ggsave(paste0(usr,dir,"/Analysis/maps/Phalarope_Sightings_byCruise.jpeg"))
+
+
+data=survey_dat_ON%>%filter(Species!="null")%>%
+  filter(Animal=="bird")%>%filter(Species=="RNPH" | Species=="REPH" | Species=="UNPH")
+
+
+data%>%group_by(Cruise_ID, Species_Name)%>%
+  summarise(n_sightings=n_distinct(datetime),
+            n_count=sum(Count))
+
+survey_dat_ON$month<-month(survey_dat_ON$datetime)
+data%>%group_by(month,Species_Name)%>%
+  summarise(n_sightings=n_distinct(datetime),
+            n_count=sum(Count))
+data%>%group_by(Species_Name,FlightHt)%>%filter(is.na(FlightHt)==FALSE)%>%
+  summarise(n_count=sum(Count))
+
+
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
+  geom_path(data=survey_dat_ON,aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=survey_dat_ON%>%filter(Species!="null")%>%
+               filter(Animal=="bird")%>%filter(Species=="RNPH" | Species=="REPH" | Species=="UNPH"),
+             aes(x=Longitude,y=Latitude, color=Species, size=Count))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(40.1,46.2))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  facet_wrap(~month, nrow=1)
+ggsave(paste0(usr,dir,"/Analysis/maps/Phalarope_Sightings_byMonth.jpeg"))
+
+
+ggplot()+
+  #geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
+  geom_polygon(data=states,aes((long),lat,group=group),fill="gray10",color="grey95",linewidth=0.1)+
+  geom_polygon(data=coos2,aes(y=lat,x=lon),fill="gray80")+
+  geom_polygon(data=brook2,aes(y=lat,x=lon),fill="gray80")+
+  geom_path(data=survey_dat_ON,aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=survey_dat_ON%>%filter(Species!="null")%>%
+               filter(Animal=="bird")%>%filter(Species=="RNPH" | Species=="REPH" | Species=="UNPH"),
+             aes(x=Longitude,y=Latitude, color=as.factor(month), size=Count))+
+  #geom_point(data=colonies,
+  #           aes(x=lon,y=lat), color="turquoise", size=3, pch=17)+
+  #annotate("text", label = "Hunters Island", x = -123.8, y = 42.313556, size = 3, colour = "white")+
+  annotate("text", label = "Oregon Call Area", x = -126.35, y = 43.8, size = 3, hjust = 0, colour = "black")+
+  annotate("text", label = "Coos Bay", x = -126.35, y = 43.7, size = 3, hjust = 0, colour = "black")+
+  annotate("text", label = "Oregon Call Area", x = -126.35, y = 42.2, size = 3, hjust = 0, colour = "black")+
+  annotate("text", label = "Brookings", x = -126.35, y = 42.1, size = 3, hjust = 0, colour = "black")+
+  scale_color_manual(values=met.brewer("Tam", 4))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(41,44.5))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  theme(legend.title = element_blank())
+ggsave(paste0(usr,dir,"/Analysis/maps/Phalarope_Sightings_All_colorMonth_windares.jpeg"))
+
+ggplot()+
+  #geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
+  geom_polygon(data=states,aes((long),lat,group=group),fill="gray10",color="grey95",linewidth=0.1)+
+  geom_polygon(data=coos2,aes(y=lat,x=lon),fill="gray80")+
+  geom_polygon(data=brook2,aes(y=lat,x=lon),fill="gray80")+
+  geom_path(data=survey_dat_ON,aes(x=Longitude,y=Latitude, group=Segment_ODid))+
+  geom_point(data=survey_dat_ON%>%filter(Species!="null")%>%
+               filter(Animal=="bird")%>%filter(Species=="RNPH" | Species=="REPH" | Species=="UNPH"),
+             aes(x=Longitude,y=Latitude, color=as.factor(Species), size=Count))+
+  #geom_point(data=colonies,
+  #           aes(x=lon,y=lat), color="turquoise", size=3, pch=17)+
+  #annotate("text", label = "Hunters Island", x = -123.8, y = 42.313556, size = 3, colour = "white")+
+  annotate("text", label = "Oregon Call Area", x = -126.35, y = 43.8, size = 3, hjust = 0, colour = "black")+
+  annotate("text", label = "Coos Bay", x = -126.35, y = 43.7, size = 3, hjust = 0, colour = "black")+
+  annotate("text", label = "Oregon Call Area", x = -126.35, y = 42.2, size = 3, hjust = 0, colour = "black")+
+  annotate("text", label = "Brookings", x = -126.35, y = 42.1, size = 3, hjust = 0, colour = "black")+
+  scale_color_manual(values=met.brewer("Tam", 4))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-122.9),ylim=c(41,44.5))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()+
+  theme(legend.title = element_blank())
+ggsave(paste0(usr,dir,"/Analysis/maps/Phalarope_Sightings_All_colorSpecies_windares.jpeg"))
