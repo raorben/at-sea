@@ -24,14 +24,14 @@ dir<-"/Library/CloudStorage/Box-Box/Seabird Oceanography Lab/Current_Research/MO
 if(Sys.info()[7]=="kennerlw") {usr<-"/Users/kennerlw";
 dir<-"/Box/Seabird Oceanography Lab/Current_Research/MOSAIC_Seabird At-Sea Observations/"}
 
-sp<-read.csv(paste0(usr,dir,"data/SeaLog-Species_CodeList.csv"))
-names(sp)<-c("Species_Name","Code","Sci_name","Animal", "Unk_YN")
+sp<-read.csv(paste0(usr,dir,"data/SeaLog-Species_CodeList.csv"),na.strings = "null")
+names(sp)<-c("Species_Name","Code","Sci_name","Animal", "Unk_YN","Size")
 
 Files<-list.files(paste0(usr,dir,"data/CorrectedData"),pattern = ".csv",full.names = T,recursive = T)
 
 survey_dat<-NULL
 for (j in 1:length(Files)){
-  dat<-read.csv(file=Files[j],stringsAsFactors=FALSE,na.strings = "NA") 
+  dat<-read.csv(file=Files[j],stringsAsFactors=FALSE,na.strings = "null") 
   dat$TripID<-as.character(dat$TripID)
   dat$PortCondition<-as.character(dat$PortCondition)
   dat$Beaufort<-as.character(dat$Beaufort)
@@ -72,9 +72,10 @@ survey_dat$year<-year(survey_dat$datetime)
 survey_dat<-left_join(survey_dat, sp, by=c("Species"="Code"))
 
 
+
 # searches for sightings without number of birds --------------------------
 unique(survey_dat$Cruise_ID)
-C_ID<-unique(survey_dat$Cruise_ID)[7] #select new cruise ID here [#]
+C_ID<-unique(survey_dat$Cruise_ID)[2] #select new cruise ID here [#]
 
 missing_number<-survey_dat%>%filter(Cruise_ID==C_ID) %>%
   filter(is.na(Species)==FALSE)%>%
@@ -97,12 +98,12 @@ species_sum_mammals<-species_sum%>%filter(Animal=="mammal")
 species_sum_birds<-species_sum%>%filter(Animal=="bird")%>%
   arrange(Species)
 
-#write.csv(species_sum_birds%>%filter(On.OffTx=="ON")%>%
+write.csv(species_sum_birds%>%filter(On.OffTx=="ON")%>%
 ungroup()%>%
   select(-Animal,-On.OffTx), 
 paste0(usr,dir,"Analysis/processed_data/",C_ID,"_SpeciesSummaryTable_allbirdsON.csv")) #birds ON
 
-#write.csv(species_sum_birds%>%filter(On.OffTx=="OFF")%>%
+write.csv(species_sum_birds%>%filter(On.OffTx=="OFF")%>%
 ungroup()%>%
   select(-Animal,-On.OffTx), 
 paste0(usr,dir,"Analysis/processed_data/",C_ID,"_SpeciesSummaryTable_allbirdsOFF.csv")) #birds OFF
@@ -120,8 +121,8 @@ species_sum_UNK_dt<-full_join(species_sum_UNK,info%>%select(Species,datetime,Sta
 
 species_sum_UNK_dt
 
-summary table of sightings to fix, added FIXED once these are made
-#write.csv(species_sum_UNK_dt,paste0(usr,dir,"Analysis/processed_data/",C_ID,"_SpeciesSummaryTable_BIRD_fixed.csv"))
+#summary table of sightings to fix, added FIXED once these are made
+write.csv(species_sum_UNK_dt,paste0(usr,dir,"Analysis/processed_data/",C_ID,"_SpeciesSummaryTable_BIRD_fixed.csv"))
 
 #  makes Obs column & Obs side column -------------------------------------
 names(survey_dat)
@@ -137,9 +138,11 @@ unique(survey_dat$Obs2)
 which(survey_dat$Obs2==2)
 (twoObs<-survey_dat%>%filter(Obs2==2)) #checks for instances when OBS were entered on both port & starboard
 
+
 survey_dat$Obs[is.na(survey_dat$StarboardObs)==TRUE]<-survey_dat$PortObs[is.na(survey_dat$StarboardObs)==TRUE]
 unique(survey_dat$Obs) 
-unique(survey_dat$Date[survey_dat$Obs=="WAP"]) #put typos here to find the files
+unique(survey_dat$Date[survey_dat$Obs=="EL"]) #put typos here to find the files
+
 
 #observer fields sometimes are half filled if the GPS logs when someone is changing the field. 
 survey_dat%>%filter(Obs=="LDB") #records to clean up "LDB","WAP" "APD"
@@ -161,8 +164,6 @@ sp_SUM_fh<-flight_heights%>%group_by(Species,PrimaryBehavior,SecondaryBehavior,U
 sp_SUM_fh%>%ungroup()%>%filter(PrimaryBehavior=="Sitting")
 
 unique(sp_SUM_fh$PrimaryBehavior)    
-
-
 
 
 
