@@ -24,7 +24,7 @@ sp<-read.csv(paste0(usr,dir,"data/SeaLog-Species_CodeList.csv"), na.strings = "N
 names(sp)<-c("Species_Name","Species","Sci_name","Animal","Unidentified_YN","Size")
 head(sp)
 
-Files<-list.files(paste0(usr,dir,"Analysis/processed_data/"),pattern = "_survey_data.rds",full.names = T,recursive = T)
+(Files<-list.files(paste0(usr,dir,"Analysis/processed_data"),pattern = "_survey_data.rds",full.names = T,recursive = T))
 
 obs<-NULL
 for (j in 1:length(Files)){
@@ -433,7 +433,7 @@ print(var(seg_sf$dist_km))
 hist(seg_sf$dist_km, main = "Distribution of segment lengths", xlab = "distance (km)")
 
 
-seg_sf_cut<-seg_df%>%filter(dist_km>1.5)
+seg_sf_cut<-seg_df%>%filter(dist_km>1)
 #calculate survey effort dropped by cruise relative to cutoff selected above
 seg_sf_cut%>%group_by(Cruise_ID)%>%
   summarise(LengthDropped=sum(dist_km))
@@ -443,4 +443,4 @@ print(var(seg_sf_cut$dist_km))
 hist(seg_sf_cut$dist_km, main = "Distribution of segment lengths", xlab = "distance (km)")
 
 
-seg_df%>%filter(dist_km>1.5)%>%filter()
+seg_df%>%filter(dist_km>1)%>%filter()

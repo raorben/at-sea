@@ -60,6 +60,7 @@ survey_dat_ON<-survey_dat%>%filter(On.OffTx=="ON")%>%
 unique(survey_dat_ON$Segment_ODid)
 survey_dat_ON$Cruise_Type<-"MOSAIC"
 survey_dat_ON$Cruise_Type[survey_dat_ON$Cruise_ID=="202307HL3" | survey_dat_ON$Cruise_ID=="202308HL4"]<-"HAKE"
+survey_dat_ON$Cruise_Type[survey_dat_ON$Cruise_ID=="202301HALO" | survey_dat_ON$Cruise_ID=="202307HALO" | survey_dat_ON$Cruise_ID=="202404HALO"]<-"HALO"
 
 
 # quick summary of off-transect sightings
@@ -91,7 +92,7 @@ ggplot()+
   xlab(expression(paste("Longitude (",degree,"W)")))+
   ylab(expression(paste("Latitude (",degree,"N)")))+
   theme_bw()+
-  facet_wrap(~Cruise_Type+Cruise_ID, nrow=1)
+  facet_wrap(~Cruise_Type+Cruise_ID, nrow=2)
 ggsave(paste0(usr,dir,"/Analysis/maps/On_Effort.jpeg"))
 
 
@@ -118,6 +119,17 @@ ggplot()+
   theme_bw()
   #theme(legend.position = "none")
 ggsave(paste0(usr,dir,"/Analysis/maps/On_Effort_HAKE.jpeg"))
+
+ggplot()+
+  geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",linewidth=0.1)+
+  geom_path(data=survey_dat_ON%>%filter(Cruise_Type=="HALO"),
+            aes(x=Longitude,y=Latitude, group=Segment_ODid, color=date))+
+  coord_fixed(ratio=1.7,xlim = c(-126.5,-123),ylim=c(44,46))+
+  xlab(expression(paste("Longitude (",degree,"W)")))+
+  ylab(expression(paste("Latitude (",degree,"N)")))+
+  theme_bw()
+#theme(legend.position = "none")
+ggsave(paste0(usr,dir,"/Analysis/maps/On_Effort_HALO.jpeg"))
 
 
 quartz(height=7,width=12)
@@ -206,6 +218,8 @@ ggplot()+
   theme(axis.text.x = element_text(angle = -60, hjust=-.1))
 ggsave(paste0(usr,dir,"/Analysis/maps/SeabirdSightings_topSP_sightings30_Cruise_HAKE_noUNI.jpeg"))
 
+
+# finds high fliers -------------------------------------------------------
 
 
 unique(survey_dat_ON$FlightHt)
