@@ -376,7 +376,7 @@ plyr::d_ply(seg_sf, ~Cruise_ID, function(d){
     geom_sf(aes(geometry = geometry, color = as.character(seg))) +
     scale_colour_discrete(name = "#Segment", guide = "none") +
     theme_classic()
-  ggsave(g, file = paste0(usr,dir,"Analysis/Leg_Plots/All_transects_seg_5km_", d$Cruise_ID[1], ".png", sep=""), dpi = 300, width = 6, height = 8)
+  ggsave(g, file = paste0(usr,dir,"Analysis/Segmentation/Leg_Plots/All_transects_seg_5km_", d$Cruise_ID[1], ".png", sep=""), dpi = 300, width = 6, height = 8)
 })
 
 seg_sf <- seg_df %>%
