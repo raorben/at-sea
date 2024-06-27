@@ -35,8 +35,8 @@ str(sp$Code)
 str(unique(all_survey$Species))
 all_survey<-left_join(all_survey,sp%>%select(Code,Unidentified_YN), by=c("Species"="Code"))
 
-saveRDS(all_survey, 
-        paste0(usr,dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
+#saveRDS(all_survey, 
+#        paste0(usr,dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
 
 survey_dat<-readRDS(paste0(usr,dir,"Analysis/processed_data/Survey_data_MOSAIC_ALL.rda")) 
 unique(survey_dat$Cruise_ID)
@@ -191,7 +191,7 @@ unique(birds_to_model$Species_Name)
 birds_to_model$Species<-as.factor(birds_to_model$Species)
 
 
-C_ID<-unique(survey_dat_ON$Cruise_ID)[7]
+C_ID<-unique(survey_dat_ON$Cruise_ID)[10]
 quartz(height=7, width=8)
 ggplot()+
   geom_polygon(data=w2hr_sub,aes((long),lat,group=group),fill="gray60",color="grey10",size=0.1)+
@@ -462,6 +462,7 @@ survey_dat_ON%>%filter(Species!="null")%>%
 
 # Cruise Summary: Unidentified vs. Identified ----------------------------------------------------------
 library(tidyr)
+C_ID<-unique(survey_dat_ON$Cruise_ID)[10]
 survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
                          group_by(Unidentified_YN,Cruise_Type,Cruise_ID)%>%
   summarise(n=n(),
@@ -502,8 +503,7 @@ survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
 
 
 C<-survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
-  filter(Cruise_ID=="202310")%>%
-  #filter(Cruise_Type=="HAKE")%>%
+  filter(Cruise_ID==C_ID)%>%
   filter(Unidentified_YN=="N")
 nrow(C)
 sum(C$Count)
@@ -511,8 +511,7 @@ length(unique(C$Species))
 unique(C$Species_Name)
 
 Cu<-survey_dat_ON%>%filter(Animal=="bird")%>%filter(Bin!="outside of area")%>%
-  filter(Cruise_ID=="202310")%>%
- #filter(Cruise_Type=="HAKE")%>%
+  filter(Cruise_ID==C_ID)%>%
   filter(Unidentified_YN=="Y")
 nrow(Cu)
 sum(Cu$Count)
@@ -524,13 +523,12 @@ unique(Cu$Species_Name)
 (sighting_sum<-survey_dat_ON%>%filter(Animal=="bird")%>%
     select(-Animal)%>%
     filter(Bin!="outside of area")%>%
-  filter(Cruise_ID=="202310")%>%
-  #filter(Cruise_Type=="HAKE")%>%
+   filter(Cruise_ID==C_ID)%>%
   group_by(Species_Name,Unidentified_YN)%>%
   summarise(Sightings=n(),Individuals=sum(Count))%>%
   arrange(Unidentified_YN))
 write.csv(sighting_sum, 
-          paste0(usr,dir,"Analysis/processed_data/sightingsSum_202310.csv")) 
+          paste0(usr,dir,"Analysis/processed_data/sightingsSum_",C_ID,".csv")) 
 
 # HAKE top Species --------------------------------------------------------
 
